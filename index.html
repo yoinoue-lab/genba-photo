@@ -491,27 +491,44 @@ async function savePhotos(folderId){
   try{
     const db = await openDB();
     const arr = state.photosByFolder[folderId] || [];
-    await new Promise((resolve, reject)=>{
-      const tx = db.transaction('photos', 'readwrite');
-      const store = tx.objectStore('photos');
-      // 既存のこのフォルダのレコードを一旦削除してから入れ直す（削除・並び替えにも対応するため）
-      const idx = store.index('folderId');
+
+    // フェーズ1：既存レコードを全削除（カーソルで全件取得してから削除）
+    const existingIds = await new Promise((resolve, reject)=>{
+      const tx = db.transaction('photos', 'readonly');
+      const idx = tx.objectStore('photos').index('folderId');
       const range = IDBKeyRange.only(folderId);
-      const delReq = idx.openCursor(range);
-      delReq.onsuccess = (e)=>{
+      const ids = [];
+      const req = idx.openCursor(range);
+      req.onsuccess = (e)=>{
         const cursor = e.target.result;
-        if(cursor){
-          cursor.delete();
-          cursor.continue();
-        }else{
-          arr.forEach(p=>{
-            store.put({ id:p.id, folderId, dataUrl:p.dataUrl, fullDataUrl:p.fullDataUrl||null, num:p.num, name:p.name });
-          });
-        }
+        if(cursor){ ids.push(cursor.primaryKey); cursor.continue(); }
+        else resolve(ids);
       };
-      tx.oncomplete = resolve;
-      tx.onerror = ()=> reject(tx.error);
+      req.onerror = ()=> reject(req.error);
     });
+
+    if(existingIds.length > 0){
+      await new Promise((resolve, reject)=>{
+        const tx = db.transaction('photos', 'readwrite');
+        const store = tx.objectStore('photos');
+        existingIds.forEach(id => store.delete(id));
+        tx.oncomplete = resolve;
+        tx.onerror = ()=> reject(tx.error);
+      });
+    }
+
+    // フェーズ2：新しいデータを書き込む（削除完了後）
+    if(arr.length > 0){
+      await new Promise((resolve, reject)=>{
+        const tx = db.transaction('photos', 'readwrite');
+        const store = tx.objectStore('photos');
+        arr.forEach(p=>{
+          store.put({ id:p.id, folderId, dataUrl:p.dataUrl, fullDataUrl:p.fullDataUrl||null, num:p.num, name:p.name });
+        });
+        tx.oncomplete = resolve;
+        tx.onerror = ()=> reject(tx.error);
+      });
+    }
   }catch(e){
     console.warn('photo save failed', e);
     toast('写真の保存に失敗しました。端末の空き容量をご確認ください');
@@ -869,14 +886,45 @@ async function renderPhotoArea(){
       e.stopPropagation();
       const id = btn.getAttribute('data-id');
       const arr = state.photosByFolder[currentFolderId];
-      const idx = arr.findIndex(p=>p.id===id);
-      if(idx>=0){
-        arr.splice(idx,1);
-        await savePhotos(currentFolderId);
-        await renderPhotoArea();
-        await renderBuildings(); // バッジ数更新（裏で）
-        toast('写真を削除しました');
-      }
+      const p = arr.find(x=>x.id===id);
+      if(!p) return;
+
+      // 確認ダイアログ
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      overlay.innerHTML = `
+        <div class="sheet">
+          <h2>写真を削除しますか？</h2>
+          <div class="hint" style="margin-bottom:14px; line-height:1.8;">
+            <b style="color:var(--ink);">No.${p.num}</b> の写真を削除します。<br>
+            <b style="color:var(--clay);">この操作は取り消せません。</b>
+          </div>
+          <div style="background:#e8e5da; border-radius:8px; overflow:hidden; margin-bottom:14px;">
+            <img src="${p.dataUrl}" style="width:100%; display:block; max-height:180px; object-fit:cover;">
+          </div>
+          <div class="row2">
+            <button class="btn btn-ghost" id="cancelDelPhoto">キャンセル</button>
+            <button class="btn btn-clay" id="confirmDelPhoto">削除する</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      overlay.onclick = (ev)=>{ if(ev.target===overlay) overlay.remove(); };
+      document.getElementById('cancelDelPhoto').onclick = ()=> overlay.remove();
+      document.getElementById('confirmDelPhoto').onclick = async ()=>{
+        overlay.remove();
+        const idx = arr.findIndex(x=>x.id===id);
+        if(idx>=0){
+          arr.splice(idx,1);
+          await savePhotos(currentFolderId);
+          // キャッシュをクリアして再読み込みを強制（renderBuildingsで正確な枚数を表示するため）
+          delete state.photosByFolder[currentFolderId];
+          state.photosByFolder[currentFolderId] = arr;
+          await renderPhotoArea();
+          await renderBuildings();
+          toast('写真を削除しました');
+        }
+      };
     };
   });
 }
