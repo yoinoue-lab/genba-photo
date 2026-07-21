@@ -1133,7 +1133,9 @@ async function handleEndApp(){
 
   const endNowBtn = $('#confirmEndNow');
   if(endNowBtn){
-    endNowBtn.onclick = ()=> finishApp();
+    endNowBtn.onclick = ()=>{
+      overlay.remove(); // ダイアログを閉じるだけ。写真はIndexedDBに保存済みのためタブを閉じてOK
+    };
   }
 
   const exportThenEndBtn = $('#exportThenEnd');
@@ -1141,7 +1143,7 @@ async function handleEndApp(){
     exportThenEndBtn.onclick = async ()=>{
       overlay.remove();
       await exportAllBuildingsZip();
-      finishApp();
+      toast('ZIP出力完了。タブを閉じて終了してください。');
     };
   }
 }
@@ -1156,18 +1158,6 @@ async function exportAllBuildingsZip(){
     currentBuildingId = before;
     await new Promise(r=>setTimeout(r, 400)); // 連続ダウンロードのブラウザ制限対策
   }
-}
-
-function finishApp(){
-  /* iPhoneでは終了画面を表示したままにすると
-     SafariがバックグラウンドでIndexedDBのメモリを解放し
-     数時間後にデータが消えるリスクがある。
-     そのため終了画面は廃止し、建物一覧に戻って
-     「タブを閉じてください」とトーストで案内する。 */
-  backToBuildings();
-  setTimeout(()=>{
-    toast('このタブを閉じて終了してください（写真データは端末内に保存済みです）');
-  }, 300);
 }
 
 $('#endBtn').onclick = handleEndApp;
