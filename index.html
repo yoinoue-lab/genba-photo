@@ -1189,14 +1189,6 @@ $('#pickInput').addEventListener('change', (e)=>{
   e.target.value = '';
 });
 
-/* ---------- 誤ってブラウザ操作で閉じようとした場合の抑止（補助的な警告） ---------- */
-let _appFinished = false;
-window.addEventListener('beforeunload', (e)=>{
-  if(_appFinished) return; // 「終了」ボタン経由なら警告しない
-  e.preventDefault();
-  e.returnValue = '';
-});
-
 /* ---------- 初期化 ---------- */
 (async function init(){
   await loadState();
