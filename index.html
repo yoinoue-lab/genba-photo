@@ -1092,59 +1092,26 @@ async function countAllPhotos(){
 }
 
 async function handleEndApp(){
-  const total = await countAllPhotos();
-
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
-
-  if(total === 0){
-    overlay.innerHTML = `
-      <div class="sheet">
-        <h2>アプリを終了します</h2>
-        <div class="hint" style="margin-bottom:14px;">保存されている写真はありません。そのまま終了できます。</div>
-        <div class="row2">
-          <button class="btn btn-ghost" id="cancelEnd">戻る</button>
-          <button class="btn btn-clay" id="confirmEndNow">終了する</button>
-        </div>
+  overlay.innerHTML = `
+    <div class="sheet">
+      <h2>アプリを終了します</h2>
+      <div class="hint" style="margin-bottom:18px; line-height:1.9; font-size:.88rem;">
+        写真データは端末内に自動保存されています。<br>
+        このまま<b>ブラウザのタブを閉じて</b>終了してください。<br><br>
+        <span style="color:var(--steel);">※ ZIP出力がまだの場合は「戻る」を押して<br>　「📦 ZIP出力」ボタンから出力できます。</span>
       </div>
-    `;
-  }else{
-    overlay.innerHTML = `
-      <div class="sheet">
-        <h2>アプリを終了します</h2>
-        <div class="hint" style="margin-bottom:14px; line-height:1.8;">
-          現在 <b style="color:var(--ink); font-size:1rem;">${total}枚</b> の写真が保存されています。<br>
-          写真は端末内に残るため消えることはありませんが、<br>
-          報告書作成用にZIP出力しておくことをおすすめします。
-        </div>
-        <div class="row2" style="flex-direction:column; gap:8px;">
-          <button class="btn btn-primary" id="exportThenEnd">📦 建物ごとにZIP出力してから終了</button>
-          <button class="btn btn-clay" id="confirmEndNow">ZIP出力せずに閉じる</button>
-          <button class="btn btn-ghost" id="cancelEnd">キャンセル（アプリに戻る）</button>
-        </div>
+      <div class="row2">
+        <button class="btn btn-ghost" id="cancelEnd">戻る</button>
+        <button class="btn btn-primary" id="confirmEndNow">わかりました</button>
       </div>
-    `;
-  }
-
+    </div>
+  `;
   document.body.appendChild(overlay);
   overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
   $('#cancelEnd').onclick = ()=> overlay.remove();
-
-  const endNowBtn = $('#confirmEndNow');
-  if(endNowBtn){
-    endNowBtn.onclick = ()=>{
-      overlay.remove(); // ダイアログを閉じるだけ。写真はIndexedDBに保存済みのためタブを閉じてOK
-    };
-  }
-
-  const exportThenEndBtn = $('#exportThenEnd');
-  if(exportThenEndBtn){
-    exportThenEndBtn.onclick = async ()=>{
-      overlay.remove();
-      await exportAllBuildingsZip();
-      toast('ZIP出力完了。タブを閉じて終了してください。');
-    };
-  }
+  $('#confirmEndNow').onclick = ()=> overlay.remove();
 }
 
 async function exportAllBuildingsZip(){
