@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -1119,7 +1120,7 @@ async function handleEndApp(){
         </div>
         <div class="row2" style="flex-direction:column; gap:8px;">
           <button class="btn btn-primary" id="exportThenEnd">📦 建物ごとにZIP出力してから終了</button>
-          <button class="btn btn-clay" id="confirmEndNow">ZIP出力せず終了する</button>
+          <button class="btn btn-clay" id="confirmEndNow">ZIP出力せずに閉じる</button>
           <button class="btn btn-ghost" id="cancelEnd">キャンセル（アプリに戻る）</button>
         </div>
       </div>
@@ -1158,16 +1159,15 @@ async function exportAllBuildingsZip(){
 }
 
 function finishApp(){
-  _appFinished = true;
-  document.body.innerHTML = `
-    <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--moss-deep); color:#fff; padding:24px; text-align:center;">
-      <div style="font-size:2rem; margin-bottom:10px;">✓</div>
-      <div style="font-size:1.1rem; font-weight:700; margin-bottom:8px;">終了しました</div>
-      <div style="font-size:.85rem; opacity:.85; line-height:1.7;">写真データは端末内に保存されています。<br>このタブを閉じて問題ありません。</div>
-    </div>
-  `;
-  // タブを閉じられる場合は閉じる（ユーザーが直接開いたタブでは制限される場合あり）
-  setTimeout(()=>{ try{ window.close(); }catch(e){} }, 600);
+  /* iPhoneでは終了画面を表示したままにすると
+     SafariがバックグラウンドでIndexedDBのメモリを解放し
+     数時間後にデータが消えるリスクがある。
+     そのため終了画面は廃止し、建物一覧に戻って
+     「タブを閉じてください」とトーストで案内する。 */
+  backToBuildings();
+  setTimeout(()=>{
+    toast('このタブを閉じて終了してください（写真データは端末内に保存済みです）');
+  }, 300);
 }
 
 $('#endBtn').onclick = handleEndApp;
