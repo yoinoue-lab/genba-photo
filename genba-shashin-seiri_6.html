@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>現場写真整理</title>
+<style>
+  :root{
+    --ink:#1c1f1a;
+    --paper:#f7f5ef;
+    --line:#d8d4c6;
+    --moss:#3f5a44;
+    --moss-deep:#2c4030;
+    --clay:#b5602f;
+    --clay-soft:#e9c9b1;
+    --steel:#5c6b6f;
+    --ok:#3f5a44;
+    --warn:#b5602f;
+    --radius:10px;
+    font-size:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Hiragino Sans","Yu Gothic",system-ui,-apple-system,sans-serif;
+    min-height:100vh;
+    padding-bottom:90px;
+  }
+  header{
+    position:sticky; top:0; z-index:30;
+    background:var(--moss-deep);
+    color:#fff;
+    padding:14px 16px 12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
+  header .row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  header h1{
+    font-size:1.05rem; font-weight:700; margin:0; letter-spacing:.02em;
+    display:flex; align-items:center; gap:8px;
+  }
+  header h1 .mark{
+    width:22px;height:22px;border-radius:5px;
+    background:var(--clay);
+    display:inline-block; position:relative; flex:none;
+  }
+  header h1 .mark::after{
+    content:"";position:absolute; inset:5px;
+    border:2px solid #fff; border-radius:2px;
+  }
+  .crumb{
+    font-size:.78rem; opacity:.85; margin-top:4px;
+  }
+  .iconbtn{
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.25);
+    color:#fff; border-radius:8px;
+    padding:7px 10px; font-size:.82rem;
+    display:flex; align-items:center; gap:5px;
+  }
+
+  main{padding:14px 14px 0;}
+
+  /* 建物選択ビュー */
+  .building-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+    margin-top:4px;
+  }
+  .building-card{
+    background:#fff; border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 12px; text-align:left; position:relative;
+    box-shadow:0 1px 0 rgba(0,0,0,.03);
+  }
+  .building-card .name{font-weight:700; font-size:.95rem; line-height:1.4; word-break:break-word;}
+  .building-card .meta{font-size:.74rem; color:var(--steel); margin-top:6px;}
+  .building-card .count-badge{
+    position:absolute; top:10px; right:10px;
+    background:var(--moss); color:#fff; font-size:.7rem;
+    border-radius:20px; padding:2px 8px; font-weight:700;
+  }
+  .building-card .card-del{
+    position:absolute; top:8px; left:8px;
+    width:26px; height:26px; border-radius:50%;
+    background:rgba(181,96,47,.12); color:var(--clay);
+    border:none; font-size:.78rem;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .building-card{padding-top:38px;}
+  .building-card .name{cursor:pointer;}
+  .building-card .meta{cursor:pointer;}
+  .add-building-card{
+    border:2px dashed var(--line); background:transparent;
+    border-radius:var(--radius); padding:14px 12px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:var(--moss-deep); font-weight:700; font-size:.88rem; gap:6px;
+    min-height:76px;
+  }
+  .add-building-card .plus{
+    width:30px;height:30px;border-radius:50%;
+    background:var(--moss); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:1.2rem; line-height:1;
+  }
+
+  .section-label{
+    font-size:.72rem; letter-spacing:.08em; color:var(--steel);
+    text-transform:uppercase; margin:18px 0 8px 2px; font-weight:700;
+  }
+
+  /* 建物内ビュー */
+  .folder-bar{
+    display:flex; gap:8px; overflow-x:auto; padding:2px 0 4px;
+    -ms-overflow-style:none; scrollbar-width:none;
+  }
+  .folder-bar::-webkit-scrollbar{display:none;}
+  .folder-chip{
+    flex:none; padding:7px 13px; border-radius:20px; font-size:.8rem;
+    background:#fff; border:1px solid var(--line); color:var(--ink); font-weight:600;
+    white-space:nowrap;
+  }
+  .folder-chip.active{
+    background:var(--moss); border-color:var(--moss); color:#fff;
+  }
+  .folder-chip.add-chip{
+    background:transparent; border:1px dashed var(--steel); color:var(--steel);
+  }
+
+  .photo-grid{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:6px;
+    margin-top:10px;
+  }
+  .photo-cell{
+    position:relative; aspect-ratio:1/1; border-radius:7px; overflow:hidden;
+    background:#e8e5da; border:1px solid var(--line);
+  }
+  .photo-cell img{width:100%;height:100%;object-fit:cover; display:block;}
+  .photo-cell .num{
+    position:absolute; left:5px; bottom:5px;
+    background:rgba(28,31,26,.72); color:#fff;
+    font-size:.66rem; font-weight:700; padding:1px 6px; border-radius:4px;
+  }
+  .photo-cell .del{
+    position:absolute; top:4px; right:4px;
+    width:20px;height:20px; border-radius:50%;
+    background:rgba(28,31,26,.55); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:.7rem; line-height:1;
+  }
+  .empty-state{
+    margin-top:30px; text-align:center; color:var(--steel);
+    padding:30px 20px; border:1px dashed var(--line); border-radius:var(--radius);
+    background:rgba(255,255,255,.4);
+  }
+  .empty-state .big{font-size:1.6rem; margin-bottom:6px;}
+  .empty-state p{font-size:.85rem; line-height:1.7; margin:4px 0 0;}
+
+  /* フッター操作バー */
+  .actionbar{
+    position:fixed; left:0; right:0; bottom:0; z-index:30;
+    background:#fff; border-top:1px solid var(--line);
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    display:flex; gap:8px;
+    box-shadow:0 -2px 10px rgba(0,0,0,.06);
+  }
+  .actionbar button{flex:1;}
+
+  .btn{
+    border:none; border-radius:9px; padding:13px 10px; font-size:.86rem;
+    font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .btn-primary{background:var(--moss); color:#fff;}
+  .btn-secondary{background:var(--paper); color:var(--moss-deep); border:1px solid var(--moss);}
+  .btn-clay{background:var(--clay); color:#fff;}
+  .btn-ghost{background:transparent; color:var(--steel); border:1px solid var(--line);}
+  .btn:disabled{opacity:.4;}
+
+  .backbtn{
+    background:transparent; border:none; color:#fff; font-size:.85rem;
+    display:flex; align-items:center; gap:4px; padding:4px 2px 4px 0; font-weight:600;
+  }
+
+  /* モーダル */
+  .overlay{
+    position:fixed; inset:0; background:rgba(28,31,26,.55);
+    display:flex; align-items:flex-end; justify-content:center; z-index:50;
+  }
+  .sheet{
+    background:#fff; width:100%; max-width:480px;
+    border-radius:16px 16px 0 0; padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+    max-height:85vh; overflow-y:auto;
+  }
+  .sheet h2{margin:0 0 14px; font-size:1.02rem;}
+  .sheet input[type=text]{
+    width:100%; padding:12px 12px; border:1px solid var(--line); border-radius:8px;
+    font-size:.95rem; margin-bottom:10px; background:var(--paper);
+  }
+  .sheet .row2{display:flex; gap:8px; margin-top:14px;}
+  .sheet .row2 button{flex:1;}
+
+  .existing-list{max-height:40vh; overflow-y:auto; margin-top:4px;}
+  .existing-item{
+    padding:11px 10px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; font-size:.9rem;
+  }
+  .existing-item .cnt{font-size:.72rem; color:var(--steel);}
+
+  .toast{
+    position:fixed; bottom:96px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:10px 18px; border-radius:20px;
+    font-size:.82rem; z-index:60; opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-4px);}
+
+  .progress-wrap{
+    margin-top:10px; background:var(--line); border-radius:6px; height:6px; overflow:hidden;
+  }
+  .progress-bar{height:100%; background:var(--moss); width:0%; transition:width .2s;}
+
+  input[type=file]{display:none;}
+
+  .hint{font-size:.76rem; color:var(--steel); line-height:1.6; margin-top:4px;}
+
+  /* ログイン画面 */
+  .login-screen{
+    position:fixed; inset:0; z-index:200;
+    background:var(--moss-deep);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .login-box{
+    background:#fff; border-radius:14px; padding:28px 24px;
+    width:100%; max-width:340px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  .login-box .mark{
+    width:40px;height:40px;border-radius:9px;
+    background:var(--clay); margin:0 auto 14px; position:relative;
+  }
+  .login-box .mark::after{
+    content:"";position:absolute; inset:9px;
+    border:2.5px solid #fff; border-radius:3px;
+  }
+  .login-box h2{
+    text-align:center; font-size:1.05rem; margin:0 0 4px; color:var(--ink);
+  }
+  .login-box .sub{
+    text-align:center; font-size:.78rem; color:var(--steel); margin-bottom:18px;
+  }
+  .login-box input{
+    width:100%; padding:12px 12px; border:1px solid var(--line); border-radius:8px;
+    font-size:.95rem; margin-bottom:10px; background:var(--paper);
+  }
+  .login-box .err{
+    color:var(--clay); font-size:.8rem; text-align:center; margin-bottom:8px; min-height:1em;
+  }
+  .login-box button{
+    width:100%; margin-top:4px;
+  }
+
+  /* 採番フラッシュ表示 */
+  .num-flash{
+    position:fixed; inset:0; z-index:70;
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0;
+    transition:opacity .18s ease;
+  }
+  .num-flash.show{opacity:1;}
+  .num-flash .badge{
+    background:var(--moss-deep); color:#fff;
+    border-radius:18px; padding:22px 34px;
+    text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.25);
+    transform:scale(.85);
+    transition:transform .18s ease;
+  }
+  .num-flash.show .badge{transform:scale(1);}
+  .num-flash .badge .label{font-size:.78rem; opacity:.8; letter-spacing:.05em;}
+  .num-flash .badge .value{font-size:2.4rem; font-weight:800; line-height:1.3; margin-top:2px;}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="mark"></div>
+    <h2>現場写真整理</h2>
+    <div class="sub">IDとパスワードを入力してください</div>
+    <input type="text" id="loginId" placeholder="ID" autocomplete="username">
+    <input type="password" id="loginPw" placeholder="パスワード" autocomplete="current-password">
+    <div class="err" id="loginErr"></div>
+    <button class="btn btn-primary" id="loginBtn">ログイン</button>
+  </div>
+</div>
+
+<header>
+  <div class="row" id="headerRow">
+    <h1><span class="mark"></span><span id="headerTitle">現場写真整理</span></h1>
+    <div style="display:flex; gap:6px;">
+      <button class="iconbtn" id="exportBtn" style="display:none;">📦 ZIP出力</button>
+      <button class="iconbtn" id="endBtn" style="background:rgba(181,96,47,.85); border-color:rgba(181,96,47,.9);">⏏ 終了</button>
+    </div>
+  </div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます</div>
+</header>
+
+<main>
+
+  <!-- 建物一覧ビュー -->
+  <div id="buildingView">
+    <div class="section-label">建物一覧</div>
+    <div class="building-grid" id="buildingGrid"></div>
+  </div>
+
+  <!-- 建物詳細ビュー -->
+  <div id="detailView" style="display:none;">
+    <button class="backbtn" id="backBtn" style="color:var(--moss-deep); margin:2px 0 6px;">← 建物一覧へ</button>
+
+    <div class="section-label">フォルダ（部位・階）</div>
+    <div class="folder-bar" id="folderBar"></div>
+
+    <div id="photoArea"></div>
+  </div>
+
+</main>
+
+<div class="actionbar" id="buildingBar">
+  <button class="btn btn-primary" id="newBuildingBtn">＋ 建物を新規作成</button>
+</div>
+
+<div class="actionbar" id="detailBar" style="display:none;">
+  <button class="btn btn-secondary" id="pickBtn">🖼 選択</button>
+  <button class="btn btn-primary" id="cameraBtn">📷 撮影</button>
+</div>
+
+<input type="file" id="cameraInput" accept="image/*" capture="environment">
+<input type="file" id="pickInput" accept="image/*" multiple>
+
+<div class="toast" id="toast"></div>
+<div class="num-flash" id="numFlash"><div class="badge"><div class="label">採番</div><div class="value" id="numFlashValue">No.1</div></div></div>
+
+<script>
+/* =========================================================
+   ログイン設定（ここを書き換えてください）
+   ※これは簡易的な「のれん」程度の制限です。
+   　本格的なセキュリティではなく、URLを知らない人の
+   　誤アクセスを防ぐ程度のものとしてご利用ください。
+   ========================================================= */
+const LOGIN_ID = "kobe-tatemono";
+const LOGIN_PASSWORD = "teikitenken";
+/* ========================================================= */
+
+const LOGIN_STORAGE_KEY = "genba-photo-auth-v1";
+
+function checkLogin(){
+  try{
+    return localStorage.getItem(LOGIN_STORAGE_KEY) === "ok";
+  }catch(e){ return false; }
+}
+
+function setLoggedIn(){
+  try{ localStorage.setItem(LOGIN_STORAGE_KEY, "ok"); }catch(e){}
+}
+
+function initLoginScreen(){
+  const screen = document.getElementById('loginScreen');
+  if(checkLogin()){
+    screen.style.display = 'none';
+    return;
+  }
+  screen.style.display = 'flex';
+
+  const idInput = document.getElementById('loginId');
+  const pwInput = document.getElementById('loginPw');
+  const errEl = document.getElementById('loginErr');
+  const btn = document.getElementById('loginBtn');
+
+  function tryLogin(){
+    const idVal = idInput.value.trim();
+    const pwVal = pwInput.value;
+    if(idVal === LOGIN_ID && pwVal === LOGIN_PASSWORD){
+      setLoggedIn();
+      screen.style.display = 'none';
+      errEl.textContent = '';
+    }else{
+      errEl.textContent = 'IDまたはパスワードが違います';
+      pwInput.value = '';
+      pwInput.focus();
+    }
+  }
+
+  btn.onclick = tryLogin;
+  pwInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') tryLogin(); });
+  idInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') pwInput.focus(); });
+  idInput.focus();
+}
+initLoginScreen();
+
+/* ---------- データストア（メモリ内 + storage API） ---------- */
+let state = {
+  buildings: [],      // {id, name, createdAt, folders:[{id,name}]}
+  photosByFolder: {}  // folderId -> [{id, dataUrl, num, name}]
+};
+let currentBuildingId = null;
+let currentFolderId = null;
+let photoCounter = 1;
+
+const $ = (sel) => document.querySelector(sel);
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function flashAssignedNumbers(nums){
+  if(!nums || nums.length === 0) return;
+  const flash = $('#numFlash');
+  const valueEl = $('#numFlashValue');
+  if(nums.length === 1){
+    valueEl.textContent = `No.${nums[0]}`;
+  }else{
+    valueEl.textContent = `No.${nums[0]}〜${nums[nums.length-1]}`;
+  }
+  flash.classList.add('show');
+  clearTimeout(flashAssignedNumbers._h);
+  flashAssignedNumbers._h = setTimeout(()=>{
+    flash.classList.remove('show');
+  }, 900);
+}
+
+/* ---------- 永続化（IndexedDB） ----------
+   理由：window.storage（5MB/キー）では撮影した写真を端末に確実に残せないため、
+   ブラウザ標準のIndexedDBを使い、ページを閉じても/再読み込みしても
+   写真が消えないようにする。ZIP出力を忘れても写真自体は端末内に残る。 */
+const DB_NAME = 'genba-photo-db';
+const DB_VERSION = 1;
+let _dbPromise = null;
+
+function openDB(){
+  if(_dbPromise) return _dbPromise;
+  _dbPromise = new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e)=>{
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains('meta')){
+        db.createObjectStore('meta', { keyPath:'key' });
+      }
+      if(!db.objectStoreNames.contains('photos')){
+        const store = db.createObjectStore('photos', { keyPath:'id' });
+        store.createIndex('folderId', 'folderId', { unique:false });
+      }
+    };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+  return _dbPromise;
+}
+
+async function saveState(){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction('meta', 'readwrite');
+      tx.objectStore('meta').put({ key:'buildings', value: state.buildings });
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ console.warn('save failed', e); toast('保存に失敗しました（端末容量をご確認ください）'); }
+}
+
+async function loadState(){
+  try{
+    const db = await openDB();
+    const result = await new Promise((resolve, reject)=>{
+      const tx = db.transaction('meta', 'readonly');
+      const req = tx.objectStore('meta').get('buildings');
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+    state.buildings = (result && result.value) || [];
+  }catch(e){ console.warn('load failed', e); state.buildings = []; }
+}
+
+/* 写真はフォルダIDをインデックスにして個別レコードで保存。
+   縮小版・高画質版どちらも保存対象（容量上限は端末のストレージ次第で数百MB〜GB単位）。 */
+async function savePhotos(folderId){
+  try{
+    const db = await openDB();
+    const arr = state.photosByFolder[folderId] || [];
+
+    // フェーズ1：既存レコードを全削除（カーソルで全件取得してから削除）
+    const existingIds = await new Promise((resolve, reject)=>{
+      const tx = db.transaction('photos', 'readonly');
+      const idx = tx.objectStore('photos').index('folderId');
+      const range = IDBKeyRange.only(folderId);
+      const ids = [];
+      const req = idx.openCursor(range);
+      req.onsuccess = (e)=>{
+        const cursor = e.target.result;
+        if(cursor){ ids.push(cursor.primaryKey); cursor.continue(); }
+        else resolve(ids);
+      };
+      req.onerror = ()=> reject(req.error);
+    });
+
+    if(existingIds.length > 0){
+      await new Promise((resolve, reject)=>{
+        const tx = db.transaction('photos', 'readwrite');
+        const store = tx.objectStore('photos');
+        existingIds.forEach(id => store.delete(id));
+        tx.oncomplete = resolve;
+        tx.onerror = ()=> reject(tx.error);
+      });
+    }
+
+    // フェーズ2：新しいデータを書き込む（削除完了後）
+    if(arr.length > 0){
+      await new Promise((resolve, reject)=>{
+        const tx = db.transaction('photos', 'readwrite');
+        const store = tx.objectStore('photos');
+        arr.forEach(p=>{
+          store.put({ id:p.id, folderId, dataUrl:p.dataUrl, fullDataUrl:p.fullDataUrl||null, num:p.num, name:p.name });
+        });
+        tx.oncomplete = resolve;
+        tx.onerror = ()=> reject(tx.error);
+      });
+    }
+  }catch(e){
+    console.warn('photo save failed', e);
+    toast('写真の保存に失敗しました。端末の空き容量をご確認ください');
+  }
+}
+
+async function loadPhotos(folderId){
+  if(state.photosByFolder[folderId]) return state.photosByFolder[folderId];
+  try{
+    const db = await openDB();
+    const records = await new Promise((resolve, reject)=>{
+      const tx = db.transaction('photos', 'readonly');
+      const idx = tx.objectStore('photos').index('folderId');
+      const range = IDBKeyRange.only(folderId);
+      const out = [];
+      const req = idx.openCursor(range);
+      req.onsuccess = (e)=>{
+        const cursor = e.target.result;
+        if(cursor){ out.push(cursor.value); cursor.continue(); }
+        else resolve(out);
+      };
+      req.onerror = ()=> reject(req.error);
+    });
+    state.photosByFolder[folderId] = records.sort((a,b)=>a.num-b.num);
+    return state.photosByFolder[folderId];
+  }catch(e){
+    console.warn('photo load failed', e);
+    state.photosByFolder[folderId] = [];
+    return state.photosByFolder[folderId];
+  }
+}
+
+/* ---------- 画像処理（縮小版＋細部確認用の2種類を生成） ---------- */
+function resizeImage(file, maxSide=1200, quality=0.82){
+  const FULL_MAX_SIDE = 4000;   // 細部確認用の上限（3MB程度を目安）
+  const FULL_QUALITY = 0.95;
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        // 縮小版（報告書用）
+        let {width, height} = img;
+        if(width > height){
+          if(width > maxSide){ height = Math.round(height * maxSide/width); width = maxSide; }
+        }else{
+          if(height > maxSide){ width = Math.round(width * maxSide/height); height = maxSide; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const smallDataUrl = canvas.toDataURL('image/jpeg', quality);
+
+        // 細部確認用（完全原寸ではなく長辺2600pxまでに抑制）
+        let fw = img.width, fh = img.height;
+        if(fw > fh){
+          if(fw > FULL_MAX_SIDE){ fh = Math.round(fh * FULL_MAX_SIDE/fw); fw = FULL_MAX_SIDE; }
+        }else{
+          if(fh > FULL_MAX_SIDE){ fw = Math.round(fw * FULL_MAX_SIDE/fh); fh = FULL_MAX_SIDE; }
+        }
+        const fullCanvas = document.createElement('canvas');
+        fullCanvas.width = fw; fullCanvas.height = fh;
+        const fullCtx = fullCanvas.getContext('2d');
+        fullCtx.drawImage(img, 0, 0, fw, fh);
+        const fullDataUrl = fullCanvas.toDataURL('image/jpeg', FULL_QUALITY);
+
+        resolve({ smallDataUrl, fullDataUrl, fullWidth: fw, fullHeight: fh });
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ---------- 建物一覧 描画 ---------- */
+async function renderBuildings(){
+  const grid = $('#buildingGrid');
+  grid.innerHTML = '';
+  for(const b of state.buildings){
+    let totalPhotos = 0;
+    for(const f of (b.folders||[])){
+      const photos = await loadPhotos(f.id);
+      totalPhotos += photos.length;
+    }
+    const card = document.createElement('div');
+    card.className = 'building-card';
+    card.innerHTML = `
+      ${totalPhotos>0 ? `<span class="count-badge">${totalPhotos}</span>` : ''}
+      <button class="card-del" data-bid="${b.id}" title="削除">🗑</button>
+      <div class="name">${escapeHtml(b.name)}</div>
+      <div class="meta">フォルダ ${ (b.folders||[]).length } 件</div>
+    `;
+    card.querySelector('.name').onclick = ()=> openBuilding(b.id);
+    card.querySelector('.meta').onclick = ()=> openBuilding(b.id);
+    card.querySelector('.card-del').onclick = (e)=>{
+      e.stopPropagation();
+      confirmDeleteBuilding(b.id);
+    };
+    grid.appendChild(card);
+  }
+  const addCard = document.createElement('button');
+  addCard.className = 'add-building-card';
+  addCard.innerHTML = `<span class="plus">＋</span>新しい建物`;
+  addCard.onclick = openNewBuildingSheet;
+  grid.appendChild(addCard);
+}
+
+async function confirmDeleteBuilding(buildingId){
+  const b = state.buildings.find(x=>x.id===buildingId);
+  if(!b) return;
+  let totalPhotos = 0;
+  for(const f of (b.folders||[])){
+    const photos = await loadPhotos(f.id);
+    totalPhotos += photos.length;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <h2>建物を削除しますか？</h2>
+      <div class="hint" style="margin-bottom:14px; line-height:1.8;">
+        <b style="color:var(--ink); font-size:1rem;">${escapeHtml(b.name)}</b><br>
+        フォルダ ${(b.folders||[]).length}件・写真 ${totalPhotos}枚 が<br>
+        すべて削除されます。<b style="color:var(--clay);">この操作は取り消せません。</b>
+      </div>
+      <div class="row2">
+        <button class="btn btn-ghost" id="cancelDeleteBuilding">キャンセル</button>
+        <button class="btn btn-clay" id="confirmDeleteBuilding">削除する</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  $('#cancelDeleteBuilding').onclick = ()=> overlay.remove();
+  $('#confirmDeleteBuilding').onclick = async ()=>{
+    await deleteBuilding(buildingId);
+    overlay.remove();
+    toast('建物を削除しました');
+    renderBuildings();
+  };
+}
+
+async function deleteBuilding(buildingId){
+  const b = state.buildings.find(x=>x.id===buildingId);
+  if(!b) return;
+  // 紐づく写真をIndexedDBから削除
+  for(const f of (b.folders||[])){
+    await deletePhotosByFolder(f.id);
+    delete state.photosByFolder[f.id];
+  }
+  // 建物自体をリストから削除
+  state.buildings = state.buildings.filter(x=>x.id!==buildingId);
+  await saveState();
+}
+
+async function deletePhotosByFolder(folderId){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction('photos', 'readwrite');
+      const idx = tx.objectStore('photos').index('folderId');
+      const range = IDBKeyRange.only(folderId);
+      const req = idx.openCursor(range);
+      req.onsuccess = (e)=>{
+        const cursor = e.target.result;
+        if(cursor){ cursor.delete(); cursor.continue(); }
+      };
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ console.warn('folder photo delete failed', e); }
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ---------- 建物新規作成シート ---------- */
+function openNewBuildingSheet(){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <h2>建物を登録</h2>
+      <input type="text" id="newBuildingName" placeholder="例）神戸〇〇マンション" maxlength="60">
+      <div class="hint">登録後、部位・階ごとのフォルダを作成できます。</div>
+      <div class="row2">
+        <button class="btn btn-ghost" id="cancelNewBuilding">キャンセル</button>
+        <button class="btn btn-primary" id="confirmNewBuilding">登録する</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const input = $('#newBuildingName');
+  input.focus();
+  $('#cancelNewBuilding').onclick = ()=> overlay.remove();
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  $('#confirmNewBuilding').onclick = async ()=>{
+    const name = input.value.trim();
+    if(!name){ toast('建物名を入力してください'); return; }
+    const b = { id: uid(), name, createdAt: Date.now(), folders: [] };
+    state.buildings.unshift(b);
+    await saveState();
+    overlay.remove();
+    renderBuildings();
+    toast('建物を登録しました');
+    openBuilding(b.id);
+  };
+}
+
+/* ---------- 建物詳細 ---------- */
+async function openBuilding(buildingId){
+  currentBuildingId = buildingId;
+  const b = state.buildings.find(x=>x.id===buildingId);
+  if(!b) return;
+
+  $('#buildingView').style.display = 'none';
+  $('#detailView').style.display = '';
+  $('#buildingBar').style.display = 'none';
+  $('#detailBar').style.display = '';
+  $('#exportBtn').style.display = '';
+  $('#headerTitle').textContent = b.name;
+  $('#crumb').textContent = 'フォルダを選んで撮影';
+
+  // フォルダが無ければ初期フォルダ候補を出すだけにしておく
+  if(!currentFolderId || !(b.folders||[]).find(f=>f.id===currentFolderId)){
+    currentFolderId = (b.folders && b.folders[0]) ? b.folders[0].id : null;
+  }
+
+  await renderFolderBar();
+  await renderPhotoArea();
+}
+
+function backToBuildings(){
+  currentBuildingId = null;
+  currentFolderId = null;
+  $('#buildingView').style.display = '';
+  $('#detailView').style.display = 'none';
+  $('#buildingBar').style.display = '';
+  $('#detailBar').style.display = 'none';
+  $('#exportBtn').style.display = 'none';
+  $('#headerTitle').textContent = '現場写真整理';
+  $('#crumb').textContent = '建物を選んで撮影を始めます';
+  renderBuildings();
+}
+
+async function renderFolderBar(){
+  const b = state.buildings.find(x=>x.id===currentBuildingId);
+  const bar = $('#folderBar');
+  bar.innerHTML = '';
+  (b.folders||[]).forEach(f=>{
+    const chip = document.createElement('button');
+    chip.className = 'folder-chip' + (f.id===currentFolderId ? ' active' : '');
+    chip.textContent = f.name;
+    chip.onclick = async ()=>{
+      currentFolderId = f.id;
+      await renderFolderBar();
+      await renderPhotoArea();
+    };
+    bar.appendChild(chip);
+  });
+  const addChip = document.createElement('button');
+  addChip.className = 'folder-chip add-chip';
+  addChip.textContent = '＋ フォルダ追加';
+  addChip.onclick = openNewFolderSheet;
+  bar.appendChild(addChip);
+}
+
+function openNewFolderSheet(){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <h2>フォルダを追加</h2>
+      <input type="text" id="newFolderName" placeholder="例）外壁 / 屋上 / バルコニー" maxlength="40">
+      <div class="hint">部位や階など、撮影箇所の単位で作成してください。</div>
+      <div class="row2">
+        <button class="btn btn-ghost" id="cancelNewFolder">キャンセル</button>
+        <button class="btn btn-primary" id="confirmNewFolder">作成する</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const input = $('#newFolderName');
+  input.focus();
+  $('#cancelNewFolder').onclick = ()=> overlay.remove();
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  $('#confirmNewFolder').onclick = async ()=>{
+    const name = input.value.trim();
+    if(!name){ toast('フォルダ名を入力してください'); return; }
+    const b = state.buildings.find(x=>x.id===currentBuildingId);
+    const f = { id: uid(), name };
+    b.folders = b.folders || [];
+    b.folders.push(f);
+    currentFolderId = f.id;
+    await saveState();
+    overlay.remove();
+    await renderFolderBar();
+    await renderPhotoArea();
+    toast('フォルダを作成しました');
+  };
+}
+
+async function renderPhotoArea(){
+  const area = $('#photoArea');
+  if(!currentFolderId){
+    area.innerHTML = `
+      <div class="empty-state">
+        <div class="big">📁</div>
+        <p>まだフォルダがありません。<br>上の「＋ フォルダ追加」から<br>部位・階ごとのフォルダを作成してください。</p>
+      </div>
+    `;
+    return;
+  }
+  const photos = await loadPhotos(currentFolderId);
+  if(photos.length === 0){
+    area.innerHTML = `
+      <div class="empty-state">
+        <div class="big">📷</div>
+        <p>このフォルダにはまだ写真がありません。<br>下の「撮影」または「選択」から<br>写真を追加してください。</p>
+      </div>
+    `;
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'photo-grid';
+  photos.forEach(p=>{
+    const cell = document.createElement('div');
+    cell.className = 'photo-cell';
+    cell.innerHTML = `
+      <img src="${p.dataUrl}" alt="${escapeHtml(p.name)}">
+      <span class="num">No.${p.num}</span>
+      <button class="del" data-id="${p.id}">✕</button>
+    `;
+    grid.appendChild(cell);
+  });
+  area.innerHTML = '';
+  area.appendChild(grid);
+
+  area.querySelectorAll('.photo-cell').forEach(cell=>{
+    cell.onclick = (e)=>{
+      if(e.target.closest('.del')) return;
+      const id = cell.querySelector('.del').getAttribute('data-id');
+      const p = (state.photosByFolder[currentFolderId]||[]).find(x=>x.id===id);
+      if(p) openFullPreview(p);
+    };
+  });
+
+  area.querySelectorAll('.del').forEach(btn=>{
+    btn.onclick = async (e)=>{
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      const arr = state.photosByFolder[currentFolderId];
+      const p = arr.find(x=>x.id===id);
+      if(!p) return;
+
+      // 確認ダイアログ
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      overlay.innerHTML = `
+        <div class="sheet">
+          <h2>写真を削除しますか？</h2>
+          <div class="hint" style="margin-bottom:14px; line-height:1.8;">
+            <b style="color:var(--ink);">No.${p.num}</b> の写真を削除します。<br>
+            <b style="color:var(--clay);">この操作は取り消せません。</b>
+          </div>
+          <div style="background:#e8e5da; border-radius:8px; overflow:hidden; margin-bottom:14px;">
+            <img src="${p.dataUrl}" style="width:100%; display:block; max-height:180px; object-fit:cover;">
+          </div>
+          <div class="row2">
+            <button class="btn btn-ghost" id="cancelDelPhoto">キャンセル</button>
+            <button class="btn btn-clay" id="confirmDelPhoto">削除する</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      overlay.onclick = (ev)=>{ if(ev.target===overlay) overlay.remove(); };
+      document.getElementById('cancelDelPhoto').onclick = ()=> overlay.remove();
+      document.getElementById('confirmDelPhoto').onclick = async ()=>{
+        overlay.remove();
+        const idx = arr.findIndex(x=>x.id===id);
+        if(idx>=0){
+          arr.splice(idx,1);
+          await savePhotos(currentFolderId);
+          // キャッシュをクリアして再読み込みを強制（renderBuildingsで正確な枚数を表示するため）
+          delete state.photosByFolder[currentFolderId];
+          state.photosByFolder[currentFolderId] = arr;
+          await renderPhotoArea();
+          await renderBuildings();
+          toast('写真を削除しました');
+        }
+      };
+    };
+  });
+}
+
+/* ---------- 写真追加処理（撮影／選択 共通） ---------- */
+async function handleFiles(fileList){
+  if(!currentFolderId){
+    toast('先にフォルダを選択・作成してください');
+    return;
+  }
+  const files = Array.from(fileList);
+  if(files.length === 0) return;
+
+  // 進捗表示用トースト的バー（簡易）
+  let done = 0;
+  const assignedNums = [];
+  if(files.length > 1) toast(`写真を処理中… (0/${files.length})`);
+
+  const arr = state.photosByFolder[currentFolderId] || (state.photosByFolder[currentFolderId] = []);
+  let nextNum = arr.length > 0 ? Math.max(...arr.map(p=>p.num)) + 1 : 1;
+
+  for(const file of files){
+    try{
+      const { smallDataUrl, fullDataUrl } = await resizeImage(file, 1200, 0.82);
+      const thisNum = nextNum++;
+      arr.push({
+        id: uid(),
+        dataUrl: smallDataUrl,      // 一覧表示・報告書用（縮小）
+        fullDataUrl: fullDataUrl,   // 細部確認用（原寸）
+        num: thisNum,
+        name: file.name || ('photo_' + Date.now() + '.jpg')
+      });
+      assignedNums.push(thisNum);
+      done++;
+      if(files.length > 1) toast(`写真を処理中… (${done}/${files.length})`);
+    }catch(err){
+      console.error('resize error', err);
+    }
+  }
+  await savePhotos(currentFolderId);
+  await renderPhotoArea();
+  renderBuildings();
+  flashAssignedNumbers(assignedNums);
+
+  if(assignedNums.length === 1){
+    toast(`No.${assignedNums[0]} として保存しました`);
+  }else if(assignedNums.length > 1){
+    toast(`No.${assignedNums[0]}〜${assignedNums[assignedNums.length-1]} を保存しました（${assignedNums.length}枚）`);
+  }
+}
+
+function openFullPreview(p){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.alignItems = 'center';
+  const src = p.fullDataUrl || p.dataUrl;
+  const isFull = !!p.fullDataUrl;
+  overlay.innerHTML = `
+    <div style="width:100%; max-width:600px; padding:0 10px;">
+      <div style="background:#000; border-radius:12px; overflow:hidden;">
+        <img src="${src}" style="width:100%; display:block;">
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding:0 4px;">
+        <span style="color:#fff; font-size:.82rem;">No.${p.num} ${isFull ? '（高画質版・細部確認用）' : '（縮小版のみ・このセッションで撮影した写真は高画質版も見られます）'}</span>
+        <button class="btn btn-ghost" style="flex:none; padding:8px 16px; background:#fff;" id="closePreview">閉じる</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closePreview').onclick = ()=> overlay.remove();
+}
+
+/* ---------- ZIPエクスポート（JSZipをCDNから読み込み） ---------- */
+let jszipLoaded = false;
+function ensureJSZip(){
+  return new Promise((resolve,reject)=>{
+    if(window.JSZip){ resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = ()=> resolve();
+    s.onerror = ()=> reject(new Error('JSZip読み込み失敗'));
+    document.head.appendChild(s);
+  });
+}
+
+async function exportBuildingZip(){
+  const b = state.buildings.find(x=>x.id===currentBuildingId);
+  if(!b || !(b.folders||[]).length){
+    toast('フォルダがありません');
+    return;
+  }
+  toast('ZIPを作成中…');
+  try{
+    await ensureJSZip();
+    const zip = new JSZip();
+    const reportRoot = zip.folder('報告書用（縮小）');
+    const fullRoot = zip.folder('細部確認用（高画質）');
+    let totalPhotos = 0;
+    let fullCount = 0;
+
+    for(const f of b.folders){
+      const photos = await loadPhotos(f.id);
+      if(photos.length === 0) continue;
+      const safeFolderName = sanitizeName(f.name);
+      const reportFolder = reportRoot.folder(safeFolderName);
+      const fullFolder = fullRoot.folder(safeFolderName);
+
+      photos
+        .slice()
+        .sort((a,b2)=>a.num-b2.num)
+        .forEach(p=>{
+          const fname = `No${String(p.num).padStart(3,'0')}.jpg`;
+          // 報告書用（縮小）は常にある
+          reportFolder.file(fname, p.dataUrl.split(',')[1], {base64:true});
+          totalPhotos++;
+          // 原寸版はこのセッションで撮影したものだけメモリに残っている
+          if(p.fullDataUrl){
+            fullFolder.file(fname, p.fullDataUrl.split(',')[1], {base64:true});
+            fullCount++;
+          }
+        });
+    }
+
+    if(totalPhotos === 0){
+      toast('写真がありません');
+      return;
+    }
+
+    const blob = await zip.generateAsync({type:'blob'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = sanitizeName(b.name) + '_写真.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+
+    if(fullCount < totalPhotos){
+      toast(`ZIP書き出し完了（報告書用${totalPhotos}枚／原寸${fullCount}枚）`);
+    }else{
+      toast(`ZIPを書き出しました（${totalPhotos}枚×2種）`);
+    }
+  }catch(err){
+    console.error(err);
+    toast('ZIP作成に失敗しました');
+  }
+}
+
+function sanitizeName(s){
+  return (s||'untitled').replace(/[\\/:*?"<>|]/g, '_').slice(0,50);
+}
+
+/* ---------- 終了ボタン処理 ---------- */
+async function countAllPhotos(){
+  let total = 0;
+  for(const b of state.buildings){
+    for(const f of (b.folders||[])){
+      const photos = await loadPhotos(f.id);
+      total += photos.length;
+    }
+  }
+  return total;
+}
+
+async function handleEndApp(){
+  const total = await countAllPhotos();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+
+  if(total === 0){
+    overlay.innerHTML = `
+      <div class="sheet">
+        <h2>アプリを終了します</h2>
+        <div class="hint" style="margin-bottom:14px;">保存されている写真はありません。そのまま終了できます。</div>
+        <div class="row2">
+          <button class="btn btn-ghost" id="cancelEnd">戻る</button>
+          <button class="btn btn-clay" id="confirmEndNow">終了する</button>
+        </div>
+      </div>
+    `;
+  }else{
+    overlay.innerHTML = `
+      <div class="sheet">
+        <h2>アプリを終了します</h2>
+        <div class="hint" style="margin-bottom:14px; line-height:1.8;">
+          現在 <b style="color:var(--ink); font-size:1rem;">${total}枚</b> の写真が保存されています。<br>
+          写真は端末内に残るため消えることはありませんが、<br>
+          報告書作成用にZIP出力しておくことをおすすめします。
+        </div>
+        <div class="row2" style="flex-direction:column; gap:8px;">
+          <button class="btn btn-primary" id="exportThenEnd">📦 建物ごとにZIP出力してから終了</button>
+          <button class="btn btn-clay" id="confirmEndNow">ZIP出力せずに閉じる</button>
+          <button class="btn btn-ghost" id="cancelEnd">キャンセル（アプリに戻る）</button>
+        </div>
+      </div>
+    `;
+  }
+
+  document.body.appendChild(overlay);
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  $('#cancelEnd').onclick = ()=> overlay.remove();
+
+  const endNowBtn = $('#confirmEndNow');
+  if(endNowBtn){
+    endNowBtn.onclick = ()=>{
+      overlay.remove(); // ダイアログを閉じるだけ。写真はIndexedDBに保存済みのためタブを閉じてOK
+    };
+  }
+
+  const exportThenEndBtn = $('#exportThenEnd');
+  if(exportThenEndBtn){
+    exportThenEndBtn.onclick = async ()=>{
+      overlay.remove();
+      await exportAllBuildingsZip();
+      toast('ZIP出力完了。タブを閉じて終了してください。');
+    };
+  }
+}
+
+async function exportAllBuildingsZip(){
+  for(const b of state.buildings){
+    const hasPhotos = (b.folders||[]).length > 0;
+    if(!hasPhotos) continue;
+    const before = currentBuildingId;
+    currentBuildingId = b.id;
+    await exportBuildingZip();
+    currentBuildingId = before;
+    await new Promise(r=>setTimeout(r, 400)); // 連続ダウンロードのブラウザ制限対策
+  }
+}
+
+$('#endBtn').onclick = handleEndApp;
+
+/* ---------- イベント登録 ---------- */
+$('#backBtn').onclick = backToBuildings;
+$('#newBuildingBtn').onclick = openNewBuildingSheet;
+$('#exportBtn').onclick = exportBuildingZip;
+
+$('#cameraBtn').onclick = ()=> $('#cameraInput').click();
+$('#pickBtn').onclick = ()=> $('#pickInput').click();
+
+$('#cameraInput').addEventListener('change', (e)=>{
+  handleFiles(e.target.files);
+  e.target.value = '';
+});
+$('#pickInput').addEventListener('change', (e)=>{
+  handleFiles(e.target.files);
+  e.target.value = '';
+});
+
+/* ---------- 初期化 ---------- */
+(async function init(){
+  await loadState();
+  renderBuildings();
+})();
+</script>
+</body>
+</html>
