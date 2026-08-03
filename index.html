@@ -301,7 +301,7 @@
       <button class="iconbtn" id="endBtn" style="background:rgba(181,96,47,.85); border-color:rgba(181,96,47,.9);">⏏ 終了</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.6</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.7</span></div>
 </header>
 
 <main>
@@ -491,48 +491,43 @@ async function savePhotos(folderId){
   try{
     const db = await openDB();
     const arr = state.photosByFolder[folderId] || [];
+    if(arr.length === 0) return;
 
-    // フェーズ1：既存レコードを全削除（カーソルで全件取得してから削除）
-    const existingIds = await new Promise((resolve, reject)=>{
-      const tx = db.transaction('photos', 'readonly');
-      const idx = tx.objectStore('photos').index('folderId');
-      const range = IDBKeyRange.only(folderId);
-      const ids = [];
-      const req = idx.openCursor(range);
-      req.onsuccess = (e)=>{
-        const cursor = e.target.result;
-        if(cursor){ ids.push(cursor.primaryKey); cursor.continue(); }
-        else resolve(ids);
-      };
-      req.onerror = ()=> reject(req.error);
-    });
-
-    if(existingIds.length > 0){
-      await new Promise((resolve, reject)=>{
-        const tx = db.transaction('photos', 'readwrite');
-        const store = tx.objectStore('photos');
-        existingIds.forEach(id => store.delete(id));
-        tx.oncomplete = resolve;
-        tx.onerror = ()=> reject(tx.error);
-      });
-    }
-
-    // フェーズ2：新しいデータを書き込む（削除完了後）
-    if(arr.length > 0){
-      await new Promise((resolve, reject)=>{
-        const tx = db.transaction('photos', 'readwrite');
-        const store = tx.objectStore('photos');
-        arr.forEach(p=>{
-          store.put({ id:p.id, folderId, dataUrl:p.dataUrl, fullDataUrl:p.fullDataUrl||null, num:p.num, name:p.name });
+    // 全件をputで上書き保存（削除フェーズをなくすことで、
+    // 保存途中にアプリが落ちても既存データが消えない）
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction('photos', 'readwrite');
+      const store = tx.objectStore('photos');
+      arr.forEach(p=>{
+        store.put({
+          id: p.id,
+          folderId,
+          dataUrl: p.dataUrl,
+          fullDataUrl: p.fullDataUrl || null,
+          num: p.num,
+          name: p.name
         });
-        tx.oncomplete = resolve;
-        tx.onerror = ()=> reject(tx.error);
       });
-    }
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
   }catch(e){
     console.warn('photo save failed', e);
     toast('写真の保存に失敗しました。端末の空き容量をご確認ください');
   }
+}
+
+/* 写真を1件だけIndexedDBから削除する（写真削除時に使用） */
+async function deletePhotoById(photoId){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction('photos', 'readwrite');
+      tx.objectStore('photos').delete(photoId);
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ console.warn('photo delete failed', e); }
 }
 
 async function loadPhotos(folderId){
@@ -775,7 +770,7 @@ function backToBuildings(){
   $('#detailBar').style.display = 'none';
   $('#exportBtn').style.display = 'none';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.6</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.7</span>';
   renderBuildings();
 }
 
@@ -915,9 +910,9 @@ async function renderPhotoArea(){
         overlay.remove();
         const idx = arr.findIndex(x=>x.id===id);
         if(idx>=0){
+          // IndexedDBから直接1件削除（全件削除→書き直しをしないので安全）
+          await deletePhotoById(id);
           arr.splice(idx,1);
-          await savePhotos(currentFolderId);
-          // キャッシュをクリアして再読み込みを強制（renderBuildingsで正確な枚数を表示するため）
           delete state.photosByFolder[currentFolderId];
           state.photosByFolder[currentFolderId] = arr;
           await renderPhotoArea();
