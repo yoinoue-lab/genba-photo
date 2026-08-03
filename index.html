@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>現場写真整理</title>
+<title>現場スナップ</title>
 <style>
   :root{
     --ink:#1c1f1a;
@@ -284,7 +284,7 @@
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
     <div class="mark"></div>
-    <h2>現場写真整理</h2>
+    <h2>現場スナップ</h2>
     <div class="sub">IDとパスワードを入力してください</div>
     <input type="text" id="loginId" placeholder="ID" autocomplete="username">
     <input type="password" id="loginPw" placeholder="パスワード" autocomplete="current-password">
@@ -295,13 +295,13 @@
 
 <header>
   <div class="row" id="headerRow">
-    <h1><span class="mark"></span><span id="headerTitle">現場写真整理</span></h1>
+    <h1><span class="mark"></span><span id="headerTitle">現場スナップ</span></h1>
     <div style="display:flex; gap:6px;">
       <button class="iconbtn" id="exportBtn" style="display:none;">📦 ZIP出力</button>
       <button class="iconbtn" id="endBtn" style="background:rgba(181,96,47,.85); border-color:rgba(181,96,47,.9);">⏏ 終了</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.4</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.6</span></div>
 </header>
 
 <main>
@@ -341,57 +341,57 @@
 
 <script>
 /* =========================================================
-   ログイン設定（ここを書き換えてください）
-   ※これは簡易的な「のれん」程度の制限です。
-   　本格的なセキュリティではなく、URLを知らない人の
-   　誤アクセスを防ぐ程度のものとしてご利用ください。
+   ユーザー管理（ここを編集してください）
+   ※ idとpasswordは自由に変更できます。
+   　 nameは管理用メモです（アプリには表示されません）。
    ========================================================= */
-const LOGIN_ID = "kobe-tatemono";
-const LOGIN_PASSWORD = "teikitenken";
+const USERS = [
+  { id: "tfc-admin",  password: "teikitenken", name: "管理者（TFC）" },
+  { id: "monitor01", password: "mon01pass",   name: "モニター01" },
+  { id: "monitor02", password: "mon02pass",   name: "モニター02" },
+  { id: "monitor03", password: "mon03pass",   name: "モニター03" },
+  { id: "monitor04", password: "mon04pass",   name: "モニター04" },
+  { id: "monitor05", password: "mon05pass",   name: "モニター05" },
+  { id: "monitor06", password: "mon06pass",   name: "モニター06" },
+  { id: "monitor07", password: "mon07pass",   name: "モニター07" },
+  { id: "monitor08", password: "mon08pass",   name: "モニター08" },
+  { id: "monitor09", password: "mon09pass",   name: "モニター09" },
+  { id: "monitor10", password: "mon10pass",   name: "モニター10" },
+];
 /* ========================================================= */
 
-const LOGIN_STORAGE_KEY = "genba-photo-auth-v1";
+const LOGIN_STORAGE_KEY = "genba-photo-auth-v2";
 
 function checkLogin(){
-  try{
-    return localStorage.getItem(LOGIN_STORAGE_KEY) === "ok";
-  }catch(e){ return false; }
+  try{ return localStorage.getItem(LOGIN_STORAGE_KEY) === "ok"; }catch(e){ return false; }
 }
-
 function setLoggedIn(){
   try{ localStorage.setItem(LOGIN_STORAGE_KEY, "ok"); }catch(e){}
 }
-
 function initLoginScreen(){
   const screen = document.getElementById('loginScreen');
-  if(checkLogin()){
-    screen.style.display = 'none';
-    return;
-  }
+  if(checkLogin()){ screen.style.display = 'none'; return; }
   screen.style.display = 'flex';
-
   const idInput = document.getElementById('loginId');
   const pwInput = document.getElementById('loginPw');
   const errEl = document.getElementById('loginErr');
   const btn = document.getElementById('loginBtn');
-
   function tryLogin(){
     const idVal = idInput.value.trim();
     const pwVal = pwInput.value;
-    if(idVal === LOGIN_ID && pwVal === LOGIN_PASSWORD){
+    const matched = USERS.find(u => u.id === idVal && u.password === pwVal);
+    if(matched){
       setLoggedIn();
       screen.style.display = 'none';
       errEl.textContent = '';
     }else{
       errEl.textContent = 'IDまたはパスワードが違います';
-      pwInput.value = '';
-      pwInput.focus();
+      pwInput.value = ''; pwInput.focus();
     }
   }
-
   btn.onclick = tryLogin;
-  pwInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') tryLogin(); });
-  idInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') pwInput.focus(); });
+  pwInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') tryLogin(); });
+  idInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') pwInput.focus(); });
   idInput.focus();
 }
 initLoginScreen();
@@ -774,8 +774,8 @@ function backToBuildings(){
   $('#buildingBar').style.display = '';
   $('#detailBar').style.display = 'none';
   $('#exportBtn').style.display = 'none';
-  $('#headerTitle').textContent = '現場写真整理';
-  $('#crumb').textContent = '建物を選んで撮影を始めます';
+  $('#headerTitle').textContent = '現場スナップ';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.6</span>';
   renderBuildings();
 }
 
@@ -952,19 +952,20 @@ async function handleFiles(fileList){
       const thisNum = nextNum++;
       arr.push({
         id: uid(),
-        dataUrl: smallDataUrl,      // 一覧表示・報告書用（縮小）
-        fullDataUrl: fullDataUrl,   // 細部確認用（原寸）
+        dataUrl: smallDataUrl,
+        fullDataUrl: fullDataUrl,
         num: thisNum,
         name: file.name || ('photo_' + Date.now() + '.jpg')
       });
       assignedNums.push(thisNum);
       done++;
+      // 1枚ごとにIndexedDBに保存（途中でアプリが落ちても写真が消えないように）
+      await savePhotos(currentFolderId);
       if(files.length > 1) toast(`写真を処理中… (${done}/${files.length})`);
     }catch(err){
       console.error('resize error', err);
     }
   }
-  await savePhotos(currentFolderId);
   await renderPhotoArea();
   renderBuildings();
   flashAssignedNumbers(assignedNums);
