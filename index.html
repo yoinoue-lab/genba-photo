@@ -301,7 +301,7 @@
       <button class="iconbtn" id="endBtn" style="background:rgba(181,96,47,.85); border-color:rgba(181,96,47,.9);">⏏ 終了</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.7</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.8</span></div>
 </header>
 
 <main>
@@ -314,7 +314,9 @@
 
   <!-- 建物詳細ビュー -->
   <div id="detailView" style="display:none;">
-    <button class="backbtn" id="backBtn" style="color:var(--moss-deep); margin:2px 0 6px;">← 建物一覧へ</button>
+    <button class="btn btn-secondary" id="backBtn" style="margin:8px 0 10px; padding:10px 16px; font-size:.88rem;">
+      ← 建物一覧へ戻る
+    </button>
 
     <div class="section-label">フォルダ（部位・階）</div>
     <div class="folder-bar" id="folderBar"></div>
@@ -770,7 +772,7 @@ function backToBuildings(){
   $('#detailBar').style.display = 'none';
   $('#exportBtn').style.display = 'none';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.7</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.8</span>';
   renderBuildings();
 }
 
