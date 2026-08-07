@@ -301,7 +301,7 @@
       <button class="iconbtn" id="endBtn" style="background:rgba(181,96,47,.85); border-color:rgba(181,96,47,.9);">⏏ 終了</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.8</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.9</span></div>
 </header>
 
 <main>
@@ -507,6 +507,7 @@ async function savePhotos(folderId){
           dataUrl: p.dataUrl,
           fullDataUrl: p.fullDataUrl || null,
           num: p.num,
+          takenAt: p.takenAt || null,
           name: p.name
         });
       });
@@ -703,6 +704,16 @@ async function deletePhotosByFolder(folderId){
   }catch(e){ console.warn('folder photo delete failed', e); }
 }
 
+function formatDateTime(date){
+  const d = date || new Date();
+  const y = d.getFullYear();
+  const mo = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  const h = String(d.getHours()).padStart(2,'0');
+  const mi = String(d.getMinutes()).padStart(2,'0');
+  return `${y}${mo}${day}${h}${mi}`;
+}
+
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -772,7 +783,7 @@ function backToBuildings(){
   $('#detailBar').style.display = 'none';
   $('#exportBtn').style.display = 'none';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.8</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v1.9</span>';
   renderBuildings();
 }
 
@@ -947,12 +958,14 @@ async function handleFiles(fileList){
     try{
       const { smallDataUrl, fullDataUrl } = await resizeImage(file, 1200, 0.82);
       const thisNum = nextNum++;
+      const takenAt = formatDateTime(new Date());
       arr.push({
         id: uid(),
         dataUrl: smallDataUrl,
         fullDataUrl: fullDataUrl,
         num: thisNum,
-        name: file.name || ('photo_' + Date.now() + '.jpg')
+        takenAt: takenAt,
+        name: file.name || (`photo_${takenAt}.jpg`)
       });
       assignedNums.push(thisNum);
       done++;
@@ -1035,8 +1048,8 @@ async function exportBuildingZip(){
         .slice()
         .sort((a,b2)=>a.num-b2.num)
         .forEach(p=>{
-          const fname = `No${String(p.num).padStart(3,'0')}.jpg`;
-          // 報告書用（縮小）は常にある
+          const dateStr = p.takenAt || formatDateTime(new Date());
+          const fname = `${p.num}_${dateStr}.jpg`;
           reportFolder.file(fname, p.dataUrl.split(',')[1], {base64:true});
           totalPhotos++;
           // 原寸版はこのセッションで撮影したものだけメモリに残っている
