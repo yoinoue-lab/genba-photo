@@ -301,7 +301,7 @@
       <button class="iconbtn" id="endBtn" style="background:rgba(181,96,47,.85); border-color:rgba(181,96,47,.9);">⏏ 終了</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.1</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.2</span></div>
 </header>
 
 <main>
@@ -361,6 +361,16 @@ const USERS = [
   { id: "monitor08", password: "mon08pass",   name: "モニター08" },
   { id: "monitor09", password: "mon09pass",   name: "モニター09" },
   { id: "monitor10", password: "mon10pass",   name: "モニター10" },
+  { id: "monitor11", password: "mon11pass",   name: "モニター11" },
+  { id: "monitor12", password: "mon12pass",   name: "モニター12" },
+  { id: "monitor13", password: "mon13pass",   name: "モニター13" },
+  { id: "monitor14", password: "mon14pass",   name: "モニター14" },
+  { id: "monitor15", password: "mon15pass",   name: "モニター15" },
+  { id: "monitor16", password: "mon16pass",   name: "モニター16" },
+  { id: "monitor17", password: "mon17pass",   name: "モニター17" },
+  { id: "monitor18", password: "mon18pass",   name: "モニター18" },
+  { id: "monitor19", password: "mon19pass",   name: "モニター19" },
+  { id: "monitor20", password: "mon20pass",   name: "モニター20" },
   { id: "seminar01", password: "snap0821",    name: "セミナー用", expiry: "2026-08-23" },
 ];
 /* ========================================================= */
@@ -798,7 +808,7 @@ function backToBuildings(){
   $('#detailBar').style.display = 'none';
   $('#exportBtn').style.display = 'none';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.1</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.2</span>';
   renderBuildings();
 }
 
