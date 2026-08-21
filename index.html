@@ -302,7 +302,7 @@
       <button class="iconbtn" id="logoutBtn" style="background:rgba(92,107,111,.7); border-color:rgba(92,107,111,.9); font-size:.75rem;">ログアウト</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.3</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.4</span></div>
 </header>
 
 <main>
@@ -352,6 +352,8 @@
    ========================================================= */
 const USERS = [
   { id: "tfc-admin",  password: "teikitenken", name: "管理者（TFC）" },
+  { id: "hirai",     password: "hirai2026",   name: "平井" },
+  { id: "maeno",     password: "maeno2026",   name: "前野" },
   { id: "monitor01", password: "mon01pass",   name: "モニター01" },
   { id: "monitor02", password: "mon02pass",   name: "モニター02" },
   { id: "monitor03", password: "mon03pass",   name: "モニター03" },
@@ -817,6 +819,7 @@ async function openBuilding(buildingId){
   $('#buildingBar').style.display = 'none';
   $('#detailBar').style.display = '';
   $('#exportBtn').style.display = '';
+  $('#logoutBtn').style.display = 'none';
   $('#headerTitle').textContent = b.name;
   $('#crumb').textContent = 'フォルダを選んで撮影';
 
@@ -837,8 +840,9 @@ function backToBuildings(){
   $('#buildingBar').style.display = '';
   $('#detailBar').style.display = 'none';
   $('#exportBtn').style.display = 'none';
+  $('#logoutBtn').style.display = '';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.3</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.4</span>';
   renderBuildings();
 }
 
