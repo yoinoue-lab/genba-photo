@@ -299,9 +299,10 @@
     <div style="display:flex; gap:6px;">
       <button class="iconbtn" id="exportBtn" style="display:none;">📦 ZIP出力</button>
       <button class="iconbtn" id="endBtn" style="background:rgba(181,96,47,.85); border-color:rgba(181,96,47,.9);">⏏ 終了</button>
+      <button class="iconbtn" id="logoutBtn" style="background:rgba(92,107,111,.7); border-color:rgba(92,107,111,.9); font-size:.75rem;">ログアウト</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.2</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.3</span></div>
 </header>
 
 <main>
@@ -375,17 +376,47 @@ const USERS = [
 ];
 /* ========================================================= */
 
-const LOGIN_STORAGE_KEY = "genba-photo-auth-v2";
+const LOGIN_STORAGE_KEY = "genba-photo-auth-v3";
 
 function checkLogin(){
-  try{ return localStorage.getItem(LOGIN_STORAGE_KEY) === "ok"; }catch(e){ return false; }
+  try{
+    const saved = localStorage.getItem(LOGIN_STORAGE_KEY);
+    if(!saved) return false;
+    const data = JSON.parse(saved);
+    if(!data.loggedIn) return false;
+    // 期限チェック（保存されたIDの期限を再確認）
+    if(data.expiry){
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const expiry = new Date(data.expiry);
+      expiry.setHours(23,59,59,999);
+      if(today > expiry) return false; // 期限切れ→再ログイン必要
+    }
+    return true;
+  }catch(e){ return false; }
 }
-function setLoggedIn(){
-  try{ localStorage.setItem(LOGIN_STORAGE_KEY, "ok"); }catch(e){}
+
+function setLoggedIn(user){
+  try{
+    localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify({
+      loggedIn: true,
+      id: user.id,
+      expiry: user.expiry || null
+    }));
+  }catch(e){}
 }
+
+function logout(){
+  try{ localStorage.removeItem(LOGIN_STORAGE_KEY); }catch(e){}
+  // ログイン画面を再表示
+  location.reload();
+}
+
 function initLoginScreen(){
   const screen = document.getElementById('loginScreen');
   if(checkLogin()){ screen.style.display = 'none'; return; }
+  // ログイン済みでも期限切れの場合はlocalStorageをクリア
+  try{ localStorage.removeItem(LOGIN_STORAGE_KEY); }catch(e){}
   screen.style.display = 'flex';
   const idInput = document.getElementById('loginId');
   const pwInput = document.getElementById('loginPw');
@@ -396,7 +427,6 @@ function initLoginScreen(){
     const pwVal = pwInput.value;
     const matched = USERS.find(u => u.id === idVal && u.password === pwVal);
     if(matched){
-      // 有効期限チェック
       if(matched.expiry){
         const today = new Date();
         today.setHours(0,0,0,0);
@@ -408,7 +438,7 @@ function initLoginScreen(){
           return;
         }
       }
-      setLoggedIn();
+      setLoggedIn(matched);
       screen.style.display = 'none';
       errEl.textContent = '';
     }else{
@@ -808,7 +838,7 @@ function backToBuildings(){
   $('#detailBar').style.display = 'none';
   $('#exportBtn').style.display = 'none';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.2</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.3</span>';
   renderBuildings();
 }
 
@@ -1203,6 +1233,27 @@ async function exportAllBuildingsZip(){
 }
 
 $('#endBtn').onclick = handleEndApp;
+$('#logoutBtn').onclick = ()=>{
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <h2>ログアウトしますか？</h2>
+      <div class="hint" style="margin-bottom:14px; line-height:1.8;">
+        ログアウトすると次回起動時にID・パスワードの入力が必要になります。<br>
+        写真データはそのまま端末内に保存されます。
+      </div>
+      <div class="row2">
+        <button class="btn btn-ghost" id="cancelLogout">キャンセル</button>
+        <button class="btn btn-clay" id="confirmLogout">ログアウト</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  $('#cancelLogout').onclick = ()=> overlay.remove();
+  $('#confirmLogout').onclick = ()=>{ overlay.remove(); logout(); };
+};
 
 /* ---------- イベント登録 ---------- */
 $('#backBtn').onclick = backToBuildings;
