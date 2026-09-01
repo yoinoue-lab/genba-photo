@@ -302,7 +302,7 @@
       <button class="iconbtn" id="logoutBtn" style="background:rgba(92,107,111,.7); border-color:rgba(92,107,111,.9); font-size:.75rem;">ログアウト</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.5</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.6</span></div>
 </header>
 
 <main>
@@ -519,7 +519,7 @@ function openDB(){
   return _dbPromise;
 }
 
-// v2.5：保存失敗時にfalseを返す（修正②）
+// v2.6：保存失敗時にfalseを返す（修正②）
 async function saveState(){
   try{
     const db = await openDB();
@@ -550,7 +550,7 @@ async function loadState(){
   }catch(e){ console.warn('load failed', e); state.buildings = []; }
 }
 
-/* v2.5 修正③：写真1件のみIndexedDBへput（全件書き直しをしない）
+/* v2.6 修正③：写真1件のみIndexedDBへput（全件書き直しをしない）
    修正②：成功時true、失敗時falseを返す */
 async function savePhoto(photo, folderId){
   try{
@@ -872,7 +872,7 @@ function backToBuildings(){
   $('#exportBtn').style.display = 'none';
   $('#logoutBtn').style.display = '';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.5</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.6</span>';
   renderBuildings();
 }
 
@@ -889,6 +889,15 @@ async function renderFolderBar(){
       await renderFolderBar();
       await renderPhotoArea();
     };
+    // 長押しでフォルダ名変更
+    let pressTimer = null;
+    chip.addEventListener('touchstart', ()=>{
+      pressTimer = setTimeout(()=>{ openRenameFolderSheet(f); }, 600);
+    });
+    chip.addEventListener('touchend', ()=>{ clearTimeout(pressTimer); });
+    chip.addEventListener('touchmove', ()=>{ clearTimeout(pressTimer); });
+    // PC用：右クリックでも変更可
+    chip.addEventListener('contextmenu', (e)=>{ e.preventDefault(); openRenameFolderSheet(f); });
     bar.appendChild(chip);
   });
   const addChip = document.createElement('button');
@@ -896,6 +905,40 @@ async function renderFolderBar(){
   addChip.textContent = '＋ フォルダ追加';
   addChip.onclick = openNewFolderSheet;
   bar.appendChild(addChip);
+}
+
+function openRenameFolderSheet(folder){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <h2>フォルダ名を変更</h2>
+      <input type="text" id="renameFolderInput" value="${escapeHtml(folder.name)}" maxlength="40">
+      <div class="hint">現在の名前：${escapeHtml(folder.name)}</div>
+      <div class="row2">
+        <button class="btn btn-ghost" id="cancelRename">キャンセル</button>
+        <button class="btn btn-primary" id="confirmRename">変更する</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const input = $('#renameFolderInput');
+  input.focus();
+  input.select();
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  $('#cancelRename').onclick = ()=> overlay.remove();
+  $('#confirmRename').onclick = async ()=>{
+    const newName = input.value.trim();
+    if(!newName){ toast('フォルダ名を入力してください'); return; }
+    if(newName === folder.name){ overlay.remove(); return; }
+    const b = state.buildings.find(x=>x.id===currentBuildingId);
+    const f = (b.folders||[]).find(x=>x.id===folder.id);
+    if(f){ f.name = newName; }
+    await saveState();
+    overlay.remove();
+    await renderFolderBar();
+    toast('フォルダ名を変更しました');
+  };
 }
 
 function openNewFolderSheet(){
@@ -1027,7 +1070,7 @@ async function renderPhotoArea(){
 }
 
 /* ---------- 写真追加処理（撮影／選択 共通） ---------- */
-// v2.5 安定化改修：修正①②③④
+// v2.6 安定化改修：修正①②③④
 async function handleFiles(fileList){
   if(!currentFolderId){
     toast('先にフォルダを選択・作成してください');
@@ -1204,7 +1247,7 @@ async function exportBuildingZip(){
     const fullRoot = zip.folder('細部確認用（高画質）');
     let totalPhotos = 0;
     let fullCount = 0;
-    // v2.5 修正⑤：フォルダ名に連番を付けて衝突を防ぐ
+    // v2.6 修正⑤：フォルダ名に連番を付けて衝突を防ぐ
     const usedFolderNames = new Set();
     let folderIdx = 1;
 
