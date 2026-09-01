@@ -302,7 +302,7 @@
       <button class="iconbtn" id="logoutBtn" style="background:rgba(92,107,111,.7); border-color:rgba(92,107,111,.9); font-size:.75rem;">ログアウト</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.4</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.5</span></div>
 </header>
 
 <main>
@@ -519,6 +519,7 @@ function openDB(){
   return _dbPromise;
 }
 
+// v2.5：保存失敗時にfalseを返す（修正②）
 async function saveState(){
   try{
     const db = await openDB();
@@ -528,7 +529,12 @@ async function saveState(){
       tx.oncomplete = resolve;
       tx.onerror = ()=> reject(tx.error);
     });
-  }catch(e){ console.warn('save failed', e); toast('保存に失敗しました（端末容量をご確認ください）'); }
+    return true;
+  }catch(e){
+    console.warn('save failed', e);
+    toast('保存に失敗しました（端末容量をご確認ください）');
+    return false;
+  }
 }
 
 async function loadState(){
@@ -544,16 +550,38 @@ async function loadState(){
   }catch(e){ console.warn('load failed', e); state.buildings = []; }
 }
 
-/* 写真はフォルダIDをインデックスにして個別レコードで保存。
-   縮小版・高画質版どちらも保存対象（容量上限は端末のストレージ次第で数百MB〜GB単位）。 */
+/* v2.5 修正③：写真1件のみIndexedDBへput（全件書き直しをしない）
+   修正②：成功時true、失敗時falseを返す */
+async function savePhoto(photo, folderId){
+  try{
+    const db = await openDB();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction('photos', 'readwrite');
+      tx.objectStore('photos').put({
+        id: photo.id,
+        folderId,
+        dataUrl: photo.dataUrl,
+        fullDataUrl: photo.fullDataUrl || null,
+        num: photo.num,
+        takenAt: photo.takenAt || null,
+        name: photo.name
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+    return true;
+  }catch(e){
+    console.warn('savePhoto失敗:', e);
+    return false;
+  }
+}
+
+/* savePhotos：削除処理など一括保存が必要な場合に使用（引き続き維持） */
 async function savePhotos(folderId){
   try{
     const db = await openDB();
     const arr = state.photosByFolder[folderId] || [];
-    if(arr.length === 0) return;
-
-    // 全件をputで上書き保存（削除フェーズをなくすことで、
-    // 保存途中にアプリが落ちても既存データが消えない）
+    if(arr.length === 0) return true;
     await new Promise((resolve, reject)=>{
       const tx = db.transaction('photos', 'readwrite');
       const store = tx.objectStore('photos');
@@ -571,9 +599,11 @@ async function savePhotos(folderId){
       tx.oncomplete = resolve;
       tx.onerror = ()=> reject(tx.error);
     });
+    return true;
   }catch(e){
     console.warn('photo save failed', e);
     toast('写真の保存に失敗しました。端末の空き容量をご確認ください');
+    return false;
   }
 }
 
@@ -842,7 +872,7 @@ function backToBuildings(){
   $('#exportBtn').style.display = 'none';
   $('#logoutBtn').style.display = '';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.4</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.5</span>';
   renderBuildings();
 }
 
@@ -997,6 +1027,7 @@ async function renderPhotoArea(){
 }
 
 /* ---------- 写真追加処理（撮影／選択 共通） ---------- */
+// v2.5 安定化改修：修正①②③④
 async function handleFiles(fileList){
   if(!currentFolderId){
     toast('先にフォルダを選択・作成してください');
@@ -1005,12 +1036,15 @@ async function handleFiles(fileList){
   const files = Array.from(fileList);
   if(files.length === 0) return;
 
-  // 進捗表示用トースト的バー（簡易）
+  // 修正①：撮影開始時のフォルダIDを固定（処理中に別フォルダへ移動しても保存先がずれない）
+  const targetFolderId = currentFolderId;
+
   let done = 0;
   const assignedNums = [];
   if(files.length > 1) toast(`写真を処理中… (0/${files.length})`);
 
-  const arr = state.photosByFolder[currentFolderId] || (state.photosByFolder[currentFolderId] = []);
+  if(!state.photosByFolder[targetFolderId]) state.photosByFolder[targetFolderId] = [];
+  const arr = state.photosByFolder[targetFolderId];
   let nextNum = arr.length > 0 ? Math.max(...arr.map(p=>p.num)) + 1 : 1;
 
   for(const file of files){
@@ -1019,8 +1053,7 @@ async function handleFiles(fileList){
       const takenAt = formatDateTime(new Date());
       const photoId = uid();
 
-      // ステップ1：縮小版（報告書用）を先に生成・保存する
-      // → メモリ不足で高画質版生成が失敗しても縮小版は確実に残る
+      // 修正④：縮小版を1回の読み込みで生成（二重生成を解消）
       const smallDataUrl = await new Promise((resolve, reject)=>{
         const reader = new FileReader();
         reader.onload = (e)=>{
@@ -1041,29 +1074,62 @@ async function handleFiles(fileList){
         reader.readAsDataURL(file);
       });
 
-      // 縮小版のみで先にIndexedDBに保存（ここで確実に記録される）
-      arr.push({
+      const photo = {
         id: photoId,
         dataUrl: smallDataUrl,
-        fullDataUrl: null,  // 高画質版は後から追加
+        fullDataUrl: null,
         num: thisNum,
         takenAt: takenAt,
         name: file.name || (`photo_${takenAt}.jpg`)
-      });
-      await savePhotos(currentFolderId);
-      assignedNums.push(thisNum);
-      done++;
-      if(files.length > 1) toast(`写真を処理中… (${done}/${files.length})`);
+      };
+      arr.push(photo);
 
-      // ステップ2：高画質版を非同期でバックグラウンド処理
-      // → 失敗してもステップ1の縮小版は既に保存済みで安全
+      // 修正③：1枚ずつsavePhotoで保存（全件書き直しではない）
+      // 修正②：保存成功確認後にのみassignedNumsに追加・成功表示
+      const saved = await savePhoto(photo, targetFolderId);
+      if(saved){
+        assignedNums.push(thisNum);
+        done++;
+        if(files.length > 1) toast(`写真を処理中… (${done}/${files.length})`);
+      }else{
+        // 保存失敗→メモリからも取り除き、成功表示しない
+        arr.splice(arr.indexOf(photo), 1);
+        toast('⚠️ 写真の保存に失敗しました。端末の空き容量をご確認ください。');
+        console.error('savePhoto失敗:', photoId);
+        continue;
+      }
+
+      // 修正①④：高画質版バックグラウンド処理もtargetFolderIdを使用
+      const fileForFull = file;
+      const targetArr = arr;
       (async ()=>{
         try{
-          const { fullDataUrl } = await resizeImage(file, 1200, 0.82);
-          const photo = arr.find(p=>p.id===photoId);
-          if(photo){
-            photo.fullDataUrl = fullDataUrl;
-            await savePhotos(currentFolderId);
+          const FULL_MAX = 3000, FULL_Q = 0.95;
+          const fullDataUrl = await new Promise((resolve, reject)=>{
+            const reader2 = new FileReader();
+            reader2.onload = (e2)=>{
+              const img2 = new Image();
+              img2.onload = ()=>{
+                let fw=img2.width, fh=img2.height;
+                if(fw>fh){ if(fw>FULL_MAX){fh=Math.round(fh*FULL_MAX/fw);fw=FULL_MAX;} }
+                else{ if(fh>FULL_MAX){fw=Math.round(fw*FULL_MAX/fh);fh=FULL_MAX;} }
+                const c2 = document.createElement('canvas');
+                c2.width=fw; c2.height=fh;
+                c2.getContext('2d').drawImage(img2,0,0,fw,fh);
+                resolve(c2.toDataURL('image/jpeg',FULL_Q));
+              };
+              img2.onerror = reject;
+              img2.src = e2.target.result;
+            };
+            reader2.onerror = reject;
+            reader2.readAsDataURL(fileForFull);
+          });
+          // 修正①：targetFolderIdのarrをIDで検索
+          const target = targetArr.find(p=>p.id===photoId);
+          if(target){
+            target.fullDataUrl = fullDataUrl;
+            // 修正③：1件のみ更新
+            await savePhoto(target, targetFolderId);
           }
         }catch(e){
           console.warn('高画質版の生成に失敗しました（縮小版は保存済み）', e);
@@ -1071,17 +1137,20 @@ async function handleFiles(fileList){
       })();
 
     }catch(err){
-      console.error('resize error', err);
-      toast('写真の保存に失敗しました。もう一度お試しください。');
+      console.error('写真処理エラー:', err);
+      toast('⚠️ 写真の処理中にエラーが発生しました。もう一度お試しください。');
     }
   }
+
   await renderPhotoArea();
   renderBuildings();
   flashAssignedNumbers(assignedNums);
 
-  if(assignedNums.length === 1){
+  if(assignedNums.length === 0){
+    // 全枚保存失敗（個別トーストで通知済み）
+  }else if(assignedNums.length === 1){
     toast(`No.${assignedNums[0]} として保存しました`);
-  }else if(assignedNums.length > 1){
+  }else{
     toast(`No.${assignedNums[0]}〜${assignedNums[assignedNums.length-1]} を保存しました（${assignedNums.length}枚）`);
   }
 }
@@ -1135,23 +1204,34 @@ async function exportBuildingZip(){
     const fullRoot = zip.folder('細部確認用（高画質）');
     let totalPhotos = 0;
     let fullCount = 0;
+    // v2.5 修正⑤：フォルダ名に連番を付けて衝突を防ぐ
+    const usedFolderNames = new Set();
+    let folderIdx = 1;
 
     for(const f of b.folders){
       const photos = await loadPhotos(f.id);
       if(photos.length === 0) continue;
-      const safeFolderName = sanitizeName(f.name);
-      const reportFolder = reportRoot.folder(safeFolderName);
-      const fullFolder = fullRoot.folder(safeFolderName);
+      // 連番付きフォルダ名で衝突を回避（例：01_外壁、02_屋上）
+      let baseName = `${String(folderIdx).padStart(2,'0')}_${sanitizeName(f.name)}`;
+      while(usedFolderNames.has(baseName)){
+        folderIdx++;
+        baseName = `${String(folderIdx).padStart(2,'0')}_${sanitizeName(f.name)}`;
+      }
+      usedFolderNames.add(baseName);
+      folderIdx++;
+
+      const reportFolder = reportRoot.folder(baseName);
+      const fullFolder = fullRoot.folder(baseName);
 
       photos
         .slice()
         .sort((a,b2)=>a.num-b2.num)
         .forEach(p=>{
           const dateStr = p.takenAt || formatDateTime(new Date());
-          const fname = `${p.num}_${dateStr}.jpg`;
+          // ファイル名にIDの先頭4文字を追加して一意性を高める
+          const fname = `${p.num}_${dateStr}_${p.id.slice(0,4)}.jpg`;
           reportFolder.file(fname, p.dataUrl.split(',')[1], {base64:true});
           totalPhotos++;
-          // 原寸版はこのセッションで撮影したものだけメモリに残っている
           if(p.fullDataUrl){
             fullFolder.file(fname, p.fullDataUrl.split(',')[1], {base64:true});
             fullCount++;
