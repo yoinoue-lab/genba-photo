@@ -302,7 +302,7 @@
       <button class="iconbtn" id="logoutBtn" style="background:rgba(92,107,111,.7); border-color:rgba(92,107,111,.9); font-size:.75rem;">ログアウト</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.7</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.9</span></div>
 </header>
 
 <main>
@@ -462,6 +462,7 @@ let state = {
 };
 let currentBuildingId = null;
 let currentFolderId = null;
+let currentPhotographer = null; // 複数人撮影モードの撮影者番号
 let photoCounter = 1;
 
 const $ = (sel) => document.querySelector(sel);
@@ -475,14 +476,15 @@ function toast(msg){
   toast._h = setTimeout(()=>t.classList.remove('show'), 1800);
 }
 
-function flashAssignedNumbers(nums){
+function flashAssignedNumbers(nums, photographer){
   if(!nums || nums.length === 0) return;
   const flash = $('#numFlash');
   const valueEl = $('#numFlashValue');
+  const prefix = photographer ? `${photographer}-` : 'No.';
   if(nums.length === 1){
-    valueEl.textContent = `No.${nums[0]}`;
+    valueEl.textContent = `${prefix}${nums[0]}`;
   }else{
-    valueEl.textContent = `No.${nums[0]}〜${nums[nums.length-1]}`;
+    valueEl.textContent = `${prefix}${nums[0]}〜${prefix}${nums[nums.length-1]}`;
   }
   flash.classList.add('show');
   clearTimeout(flashAssignedNumbers._h);
@@ -519,7 +521,7 @@ function openDB(){
   return _dbPromise;
 }
 
-// v2.7：保存失敗時にfalseを返す（修正②）
+// v2.9：保存失敗時にfalseを返す（修正②）
 async function saveState(){
   try{
     const db = await openDB();
@@ -550,7 +552,7 @@ async function loadState(){
   }catch(e){ console.warn('load failed', e); state.buildings = []; }
 }
 
-/* v2.7 修正③：写真1件のみIndexedDBへput（全件書き直しをしない）
+/* v2.9 修正③：写真1件のみIndexedDBへput（全件書き直しをしない）
    修正②：成功時true、失敗時falseを返す */
 async function savePhoto(photo, folderId){
   try{
@@ -563,6 +565,7 @@ async function savePhoto(photo, folderId){
         dataUrl: photo.dataUrl,
         fullDataUrl: photo.fullDataUrl || null,
         num: photo.num,
+        photographer: photo.photographer || null,
         takenAt: photo.takenAt || null,
         name: photo.name
       });
@@ -607,7 +610,7 @@ async function savePhotos(folderId){
   }
 }
 
-// v2.7 修正①：削除失敗時にfalseを返す（削除失敗でも「削除しました」と表示しない）
+// v2.9 修正①：削除失敗時にfalseを返す（削除失敗でも「削除しました」と表示しない）
 async function deletePhotoById(photoId){
   try{
     const db = await openDB();
@@ -697,7 +700,7 @@ function resizeImage(file, maxSide=1200, quality=0.82){
 }
 
 /* ---------- 建物一覧 描画 ---------- */
-// v2.7 修正④：写真件数のみ取得（写真本体をメモリへ読み込まない）
+// v2.9 修正④：写真件数のみ取得（写真本体をメモリへ読み込まない）
 async function countPhotosByFolder(folderId){
   // メモリにキャッシュ済みの場合はそれを使う
   if(state.photosByFolder[folderId]){
@@ -724,7 +727,7 @@ async function renderBuildings(){
   for(const b of state.buildings){
     let totalPhotos = 0;
     for(const f of (b.folders||[])){
-      // v2.7 修正④：loadPhotosではなくcountPhotosByFolderを使用
+      // v2.9 修正④：loadPhotosではなくcountPhotosByFolderを使用
       // 建物一覧表示だけで写真本体をメモリへ全件読み込まない
       totalPhotos += await countPhotosByFolder(f.id);
     }
@@ -756,7 +759,7 @@ async function confirmDeleteBuilding(buildingId){
   if(!b) return;
   let totalPhotos = 0;
   for(const f of (b.folders||[])){
-    // v2.7 修正④：確認画面表示だけで写真本体を読み込まない
+    // v2.9 修正④：確認画面表示だけで写真本体を読み込まない
     totalPhotos += await countPhotosByFolder(f.id);
   }
 
@@ -780,7 +783,7 @@ async function confirmDeleteBuilding(buildingId){
   overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
   $('#cancelDeleteBuilding').onclick = ()=> overlay.remove();
   $('#confirmDeleteBuilding').onclick = async ()=>{
-    // v2.7 修正③：削除成功確認後にのみ成功表示
+    // v2.9 修正③：削除成功確認後にのみ成功表示
     const deleted = await deleteBuilding(buildingId);
     overlay.remove();
     if(!deleted){
@@ -793,7 +796,7 @@ async function confirmDeleteBuilding(buildingId){
   };
 }
 
-// v2.7 修正③：deleteBuilding - 失敗時はロールバックしてfalseを返す
+// v2.9 修正③：deleteBuilding - 失敗時はロールバックしてfalseを返す
 async function deleteBuilding(buildingId){
   const b = state.buildings.find(x=>x.id===buildingId);
   if(!b) return false;
@@ -823,7 +826,7 @@ async function deleteBuilding(buildingId){
   return true;
 }
 
-// v2.7 修正③：deletePhotosByFolder - 戻り値追加・onabort追加
+// v2.9 修正③：deletePhotosByFolder - 戻り値追加・onabort追加
 async function deletePhotosByFolder(folderId){
   try{
     const db = await openDB();
@@ -869,8 +872,25 @@ function openNewBuildingSheet(){
     <div class="sheet">
       <h2>建物を登録</h2>
       <input type="text" id="newBuildingName" placeholder="例）神戸〇〇マンション" maxlength="60">
-      <div class="hint">登録後、部位・階ごとのフォルダを作成できます。</div>
-      <div class="row2">
+      <div class="hint" style="margin-bottom:10px;">登録後、部位・階ごとのフォルダを作成できます。</div>
+
+      <div style="border-top:1px solid var(--line); padding-top:10px; margin-top:4px;">
+        <div style="font-size:.85rem; font-weight:700; color:var(--moss-deep); margin-bottom:6px;">
+          複数人撮影の設定（任意）
+        </div>
+        <div class="hint" style="margin-bottom:8px;">
+          複数人で同時撮影する場合、撮影者番号を登録してください。<br>
+          1人で撮影する場合は空欄のままでOKです。
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+          <input type="text" id="newPhotographerInput" placeholder="例）1" maxlength="5"
+            style="width:80px; padding:8px; border:1px solid var(--line); border-radius:8px; font-size:.9rem;">
+          <button class="btn btn-secondary" id="addPhotographerBtn" style="flex:none; padding:8px 12px; font-size:.82rem;">＋ 追加</button>
+        </div>
+        <div id="photographerList" style="display:flex; flex-wrap:wrap; gap:6px; min-height:28px;"></div>
+      </div>
+
+      <div class="row2" style="margin-top:14px;">
         <button class="btn btn-ghost" id="cancelNewBuilding">キャンセル</button>
         <button class="btn btn-primary" id="confirmNewBuilding">登録する</button>
       </div>
@@ -879,14 +899,49 @@ function openNewBuildingSheet(){
   document.body.appendChild(overlay);
   const input = $('#newBuildingName');
   input.focus();
+
+  // 撮影者管理
+  let photographers = []; // ['1','2','3'...]
+  const pgInput = $('#newPhotographerInput');
+  const pgList = $('#photographerList');
+
+  function renderPgList(){
+    pgList.innerHTML = '';
+    photographers.forEach(pg=>{
+      const tag = document.createElement('span');
+      tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:var(--moss);color:#fff;border-radius:16px;padding:3px 10px;font-size:.8rem;font-weight:700;';
+      tag.innerHTML = `撮影者${pg} <button style="background:none;border:none;color:#fff;font-size:.8rem;cursor:pointer;padding:0;" data-pg="${pg}">✕</button>`;
+      tag.querySelector('button').onclick = ()=>{
+        photographers = photographers.filter(x=>x!==pg);
+        renderPgList();
+      };
+      pgList.appendChild(tag);
+    });
+  }
+
+  $('#addPhotographerBtn').onclick = ()=>{
+    const val = pgInput.value.trim();
+    if(!val){ toast('撮影者番号を入力してください'); return; }
+    if(photographers.includes(val)){ toast('すでに登録されています'); return; }
+    if(photographers.length >= 10){ toast('撮影者は最大10名まで'); return; }
+    photographers.push(val);
+    photographers.sort((a,b)=>Number(a)-Number(b)||a.localeCompare(b));
+    pgInput.value = '';
+    renderPgList();
+  };
+  pgInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') $('#addPhotographerBtn').click(); });
+
   $('#cancelNewBuilding').onclick = ()=> overlay.remove();
   overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
   $('#confirmNewBuilding').onclick = async ()=>{
     const name = input.value.trim();
     if(!name){ toast('建物名を入力してください'); return; }
-    const b = { id: uid(), name, createdAt: Date.now(), folders: [] };
+    const b = {
+      id: uid(), name, createdAt: Date.now(), folders: [],
+      photographers: photographers.length > 0 ? photographers : null
+    };
     state.buildings.unshift(b);
-    // v2.7 修正②-1：保存失敗時はロールバックして成功表示しない
+    // v2.9 修正②-1：保存失敗時はロールバックして成功表示しない
     const saved = await saveState();
     if(!saved){
       state.buildings = state.buildings.filter(x=>x.id !== b.id);
@@ -906,6 +961,11 @@ async function openBuilding(buildingId){
   const b = state.buildings.find(x=>x.id===buildingId);
   if(!b) return;
 
+  // 撮影者モードの場合、撮影者をリセット
+  if(!(b.photographers && b.photographers.length > 0)){
+    currentPhotographer = null;
+  }
+
   $('#buildingView').style.display = 'none';
   $('#detailView').style.display = '';
   $('#buildingBar').style.display = 'none';
@@ -913,15 +973,59 @@ async function openBuilding(buildingId){
   $('#exportBtn').style.display = '';
   $('#logoutBtn').style.display = 'none';
   $('#headerTitle').textContent = b.name;
-  $('#crumb').textContent = 'フォルダを選んで撮影';
 
   // フォルダが無ければ初期フォルダ候補を出すだけにしておく
   if(!currentFolderId || !(b.folders||[]).find(f=>f.id===currentFolderId)){
     currentFolderId = (b.folders && b.folders[0]) ? b.folders[0].id : null;
   }
 
-  await renderFolderBar();
-  await renderPhotoArea();
+  // 複数人撮影モードの場合、撮影者選択シートを表示
+  if(b.photographers && b.photographers.length > 0 && !currentPhotographer){
+    await renderFolderBar();
+    await renderPhotoArea();
+    openPhotographerSelectSheet(b);
+  } else {
+    updatePhotographerCrumb(b);
+    await renderFolderBar();
+    await renderPhotoArea();
+  }
+}
+
+function updatePhotographerCrumb(b){
+  if(b && b.photographers && b.photographers.length > 0 && currentPhotographer){
+    $('#crumb').innerHTML = `フォルダを選んで撮影 <span style="background:var(--clay);color:#fff;border-radius:10px;padding:1px 8px;font-size:.75rem;font-weight:700;">撮影者 ${currentPhotographer}</span>`;
+  } else {
+    $('#crumb').textContent = 'フォルダを選んで撮影';
+  }
+}
+
+function openPhotographerSelectSheet(b){
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+    <div class="sheet">
+      <h2>撮影者を選択</h2>
+      <div class="hint" style="margin-bottom:12px;">あなたの撮影者番号を選んでください。<br>写真ファイル名に「撮影者番号-撮影番号」が付きます。</div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${b.photographers.map(pg=>`
+          <button class="btn btn-secondary pg-select-btn" data-pg="${pg}" style="font-size:1rem; padding:14px;">
+            撮影者 ${pg}
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelectorAll('.pg-select-btn').forEach(btn=>{
+    btn.onclick = async ()=>{
+      currentPhotographer = btn.getAttribute('data-pg');
+      overlay.remove();
+      updatePhotographerCrumb(b);
+      await renderFolderBar();
+      await renderPhotoArea();
+      toast(`撮影者 ${currentPhotographer} で撮影します`);
+    };
+  });
 }
 
 function backToBuildings(){
@@ -934,7 +1038,7 @@ function backToBuildings(){
   $('#exportBtn').style.display = 'none';
   $('#logoutBtn').style.display = '';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.7</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.9</span>';
   renderBuildings();
 }
 
@@ -996,7 +1100,7 @@ function openRenameFolderSheet(folder){
     const b = state.buildings.find(x=>x.id===currentBuildingId);
     const f = (b.folders||[]).find(x=>x.id===folder.id);
     if(!f){ overlay.remove(); return; }
-    // v2.7 修正②-3：保存失敗時は元の名前に戻す
+    // v2.9 修正②-3：保存失敗時は元の名前に戻す
     const oldName = f.name;
     f.name = newName;
     const saved = await saveState();
@@ -1039,7 +1143,7 @@ function openNewFolderSheet(){
     const previousFolderId = currentFolderId;
     b.folders.push(f);
     currentFolderId = f.id;
-    // v2.7 修正②-2：保存失敗時はロールバックして成功表示しない
+    // v2.9 修正②-2：保存失敗時はロールバックして成功表示しない
     const saved = await saveState();
     if(!saved){
       b.folders = b.folders.filter(x=>x.id !== f.id);
@@ -1082,7 +1186,7 @@ async function renderPhotoArea(){
     cell.className = 'photo-cell';
     cell.innerHTML = `
       <img src="${p.dataUrl}" alt="${escapeHtml(p.name)}">
-      <span class="num">No.${p.num}</span>
+      <span class="num">${p.photographer ? `${p.photographer}-${p.num}` : `No.${p.num}`}</span>
       <button class="del" data-id="${p.id}">✕</button>
     `;
     grid.appendChild(cell);
@@ -1114,7 +1218,7 @@ async function renderPhotoArea(){
         <div class="sheet">
           <h2>写真を削除しますか？</h2>
           <div class="hint" style="margin-bottom:14px; line-height:1.8;">
-            <b style="color:var(--ink);">No.${p.num}</b> の写真を削除します。<br>
+            <b style="color:var(--ink);">${p.photographer ? `${p.photographer}-${p.num}` : `No.${p.num}`}</b> の写真を削除します。<br>
             <b style="color:var(--clay);">この操作は取り消せません。</b>
           </div>
           <div style="background:#e8e5da; border-radius:8px; overflow:hidden; margin-bottom:14px;">
@@ -1133,7 +1237,7 @@ async function renderPhotoArea(){
         overlay.remove();
         const idx = arr.findIndex(x=>x.id===id);
         if(idx>=0){
-          // v2.7 修正①：削除成功確認後にのみ画面更新・成功表示
+          // v2.9 修正①：削除成功確認後にのみ画面更新・成功表示
           const deleted = await deletePhotoById(id);
           if(!deleted){
             toast('⚠️ 写真の削除に失敗しました。もう一度お試しください。');
@@ -1152,7 +1256,7 @@ async function renderPhotoArea(){
 }
 
 /* ---------- 写真追加処理（撮影／選択 共通） ---------- */
-// v2.7 安定化改修：修正①②③④
+// v2.9 安定化改修：修正①②③④
 async function handleFiles(fileList){
   if(!currentFolderId){
     toast('先にフォルダを選択・作成してください');
@@ -1170,7 +1274,17 @@ async function handleFiles(fileList){
 
   if(!state.photosByFolder[targetFolderId]) state.photosByFolder[targetFolderId] = [];
   const arr = state.photosByFolder[targetFolderId];
-  let nextNum = arr.length > 0 ? Math.max(...arr.map(p=>p.num)) + 1 : 1;
+
+  // 撮影者モードの場合は撮影者ごとの連番、通常は全体の連番
+  const targetPg = currentPhotographer; // 撮影者番号（null=通常モード）
+  let nextNum;
+  if(targetPg){
+    // 同じ撮影者の最大番号+1（撮影者ごとに1から連番）
+    const pgPhotos = arr.filter(p=>p.photographer===targetPg);
+    nextNum = pgPhotos.length > 0 ? Math.max(...pgPhotos.map(p=>p.num)) + 1 : 1;
+  } else {
+    nextNum = arr.length > 0 ? Math.max(...arr.map(p=>p.num)) + 1 : 1;
+  }
 
   for(const file of files){
     try{
@@ -1204,6 +1318,7 @@ async function handleFiles(fileList){
         dataUrl: smallDataUrl,
         fullDataUrl: null,
         num: thisNum,
+        photographer: targetPg || null, // 撮影者番号（通常モードはnull）
         takenAt: takenAt,
         name: file.name || (`photo_${takenAt}.jpg`)
       };
@@ -1269,14 +1384,17 @@ async function handleFiles(fileList){
 
   await renderPhotoArea();
   renderBuildings();
-  flashAssignedNumbers(assignedNums);
+  flashAssignedNumbers(assignedNums, targetPg);
 
   if(assignedNums.length === 0){
     // 全枚保存失敗（個別トーストで通知済み）
   }else if(assignedNums.length === 1){
-    toast(`No.${assignedNums[0]} として保存しました`);
+    const label = targetPg ? `${targetPg}-${assignedNums[0]}` : `No.${assignedNums[0]}`;
+    toast(`${label} として保存しました`);
   }else{
-    toast(`No.${assignedNums[0]}〜${assignedNums[assignedNums.length-1]} を保存しました（${assignedNums.length}枚）`);
+    const first = targetPg ? `${targetPg}-${assignedNums[0]}` : `No.${assignedNums[0]}`;
+    const last = targetPg ? `${targetPg}-${assignedNums[assignedNums.length-1]}` : `No.${assignedNums[assignedNums.length-1]}`;
+    toast(`${first}〜${last} を保存しました（${assignedNums.length}枚）`);
   }
 }
 
@@ -1324,6 +1442,38 @@ async function exportBuildingZip(){
     toast('フォルダがありません');
     return;
   }
+
+  // ZIP出力前に日付時間付与の選択ダイアログを表示
+  const withDate = await new Promise((resolve)=>{
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.innerHTML = `
+      <div class="sheet">
+        <h2>📦 ZIP出力</h2>
+        <div class="hint" style="margin-bottom:14px; line-height:1.9;">
+          ファイル名に撮影日時を付けますか？<br>
+          <span style="color:var(--steel); font-size:.85rem;">
+            付ける例：<b>1_202609021052.jpg</b><br>
+            付けない例：<b>1.jpg</b>
+          </span>
+        </div>
+        <div class="row2" style="flex-direction:column; gap:8px;">
+          <button class="btn btn-primary" id="zipWithDate">📅 日付時間を付ける</button>
+          <button class="btn btn-secondary" id="zipWithoutDate">付けない（番号のみ）</button>
+          <button class="btn btn-ghost" id="cancelZip">キャンセル</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.onclick = (e)=>{ if(e.target===overlay){ overlay.remove(); resolve(null); } };
+    document.getElementById('zipWithDate').onclick = ()=>{ overlay.remove(); resolve(true); };
+    document.getElementById('zipWithoutDate').onclick = ()=>{ overlay.remove(); resolve(false); };
+    document.getElementById('cancelZip').onclick = ()=>{ overlay.remove(); resolve(null); };
+  });
+
+  // キャンセルの場合は終了
+  if(withDate === null) return;
+
   toast('ZIPを作成中…');
   try{
     await ensureJSZip();
@@ -1332,7 +1482,7 @@ async function exportBuildingZip(){
     const fullRoot = zip.folder('細部確認用（高画質）');
     let totalPhotos = 0;
     let fullCount = 0;
-    // v2.7 修正⑤：フォルダ名に連番を付けて衝突を防ぐ
+    // v2.9 修正⑤：フォルダ名に連番を付けて衝突を防ぐ
     const usedFolderNames = new Set();
     let folderIdx = 1;
 
@@ -1351,13 +1501,21 @@ async function exportBuildingZip(){
       const reportFolder = reportRoot.folder(baseName);
       const fullFolder = fullRoot.folder(baseName);
 
-      photos
-        .slice()
-        .sort((a,b2)=>a.num-b2.num)
-        .forEach(p=>{
+      // 撮影者モード対応：撮影者番号→撮影番号の順でソート
+      const sortedPhotos = photos.slice().sort((a, b2)=>{
+        const pgA = a.photographer || '';
+        const pgB = b2.photographer || '';
+        if(pgA !== pgB) return pgA.localeCompare(pgB, undefined, {numeric:true});
+        return a.num - b2.num;
+      });
+
+      sortedPhotos.forEach(p=>{
           const dateStr = p.takenAt || formatDateTime(new Date());
-          // ファイル名にIDの先頭4文字を追加して一意性を高める
-          const fname = `${p.num}_${dateStr}_${p.id.slice(0,4)}.jpg`;
+          // 日付時間付与のオン/オフに対応したファイル名生成
+          const numPart = p.photographer ? `${p.photographer}-${p.num}` : `${p.num}`;
+          const fname = withDate
+            ? `${numPart}_${dateStr}_${p.id.slice(0,4)}.jpg`
+            : `${numPart}.jpg`;
           reportFolder.file(fname, p.dataUrl.split(',')[1], {base64:true});
           totalPhotos++;
           if(p.fullDataUrl){
