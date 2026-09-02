@@ -302,7 +302,7 @@
       <button class="iconbtn" id="logoutBtn" style="background:rgba(92,107,111,.7); border-color:rgba(92,107,111,.9); font-size:.75rem;">ログアウト</button>
     </div>
   </div>
-  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.6</span></div>
+  <div class="crumb" id="crumb">建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.7</span></div>
 </header>
 
 <main>
@@ -519,7 +519,7 @@ function openDB(){
   return _dbPromise;
 }
 
-// v2.6：保存失敗時にfalseを返す（修正②）
+// v2.7：保存失敗時にfalseを返す（修正②）
 async function saveState(){
   try{
     const db = await openDB();
@@ -550,7 +550,7 @@ async function loadState(){
   }catch(e){ console.warn('load failed', e); state.buildings = []; }
 }
 
-/* v2.6 修正③：写真1件のみIndexedDBへput（全件書き直しをしない）
+/* v2.7 修正③：写真1件のみIndexedDBへput（全件書き直しをしない）
    修正②：成功時true、失敗時falseを返す */
 async function savePhoto(photo, folderId){
   try{
@@ -607,7 +607,7 @@ async function savePhotos(folderId){
   }
 }
 
-/* 写真を1件だけIndexedDBから削除する（写真削除時に使用） */
+// v2.7 修正①：削除失敗時にfalseを返す（削除失敗でも「削除しました」と表示しない）
 async function deletePhotoById(photoId){
   try{
     const db = await openDB();
@@ -616,8 +616,13 @@ async function deletePhotoById(photoId){
       tx.objectStore('photos').delete(photoId);
       tx.oncomplete = resolve;
       tx.onerror = ()=> reject(tx.error);
+      tx.onabort = ()=> reject(tx.error);
     });
-  }catch(e){ console.warn('photo delete failed', e); }
+    return true;
+  }catch(e){
+    console.warn('photo delete failed', e);
+    return false;
+  }
 }
 
 async function loadPhotos(folderId){
@@ -692,14 +697,36 @@ function resizeImage(file, maxSide=1200, quality=0.82){
 }
 
 /* ---------- 建物一覧 描画 ---------- */
+// v2.7 修正④：写真件数のみ取得（写真本体をメモリへ読み込まない）
+async function countPhotosByFolder(folderId){
+  // メモリにキャッシュ済みの場合はそれを使う
+  if(state.photosByFolder[folderId]){
+    return state.photosByFolder[folderId].length;
+  }
+  try{
+    const db = await openDB();
+    return await new Promise((resolve, reject)=>{
+      const tx = db.transaction('photos', 'readonly');
+      const index = tx.objectStore('photos').index('folderId');
+      const req = index.count(IDBKeyRange.only(folderId));
+      req.onsuccess = ()=> resolve(req.result || 0);
+      req.onerror = ()=> reject(req.error);
+    });
+  }catch(e){
+    console.warn('photo count failed', e);
+    return 0;
+  }
+}
+
 async function renderBuildings(){
   const grid = $('#buildingGrid');
   grid.innerHTML = '';
   for(const b of state.buildings){
     let totalPhotos = 0;
     for(const f of (b.folders||[])){
-      const photos = await loadPhotos(f.id);
-      totalPhotos += photos.length;
+      // v2.7 修正④：loadPhotosではなくcountPhotosByFolderを使用
+      // 建物一覧表示だけで写真本体をメモリへ全件読み込まない
+      totalPhotos += await countPhotosByFolder(f.id);
     }
     const card = document.createElement('div');
     card.className = 'building-card';
@@ -729,8 +756,8 @@ async function confirmDeleteBuilding(buildingId){
   if(!b) return;
   let totalPhotos = 0;
   for(const f of (b.folders||[])){
-    const photos = await loadPhotos(f.id);
-    totalPhotos += photos.length;
+    // v2.7 修正④：確認画面表示だけで写真本体を読み込まない
+    totalPhotos += await countPhotosByFolder(f.id);
   }
 
   const overlay = document.createElement('div');
@@ -753,26 +780,50 @@ async function confirmDeleteBuilding(buildingId){
   overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
   $('#cancelDeleteBuilding').onclick = ()=> overlay.remove();
   $('#confirmDeleteBuilding').onclick = async ()=>{
-    await deleteBuilding(buildingId);
+    // v2.7 修正③：削除成功確認後にのみ成功表示
+    const deleted = await deleteBuilding(buildingId);
     overlay.remove();
+    if(!deleted){
+      toast('⚠️ 建物の削除に失敗しました。もう一度お試しください。');
+      renderBuildings();
+      return;
+    }
     toast('建物を削除しました');
     renderBuildings();
   };
 }
 
+// v2.7 修正③：deleteBuilding - 失敗時はロールバックしてfalseを返す
 async function deleteBuilding(buildingId){
   const b = state.buildings.find(x=>x.id===buildingId);
-  if(!b) return;
-  // 紐づく写真をIndexedDBから削除
+  if(!b) return false;
+
+  // 処理前の状態を保存（saveState失敗時のロールバック用）
+  const originalBuildings = JSON.parse(JSON.stringify(state.buildings));
+
+  // フォルダの写真を順番に削除（1件でも失敗したら中止）
   for(const f of (b.folders||[])){
-    await deletePhotosByFolder(f.id);
+    const ok = await deletePhotosByFolder(f.id);
+    if(!ok){
+      console.warn('deletePhotosByFolder失敗:', f.id);
+      return false;
+    }
     delete state.photosByFolder[f.id];
   }
-  // 建物自体をリストから削除
+
+  // 建物をstateから削除
   state.buildings = state.buildings.filter(x=>x.id!==buildingId);
-  await saveState();
+
+  // saveState失敗時は元の状態に戻す
+  const saved = await saveState();
+  if(!saved){
+    state.buildings = originalBuildings;
+    return false;
+  }
+  return true;
 }
 
+// v2.7 修正③：deletePhotosByFolder - 戻り値追加・onabort追加
 async function deletePhotosByFolder(folderId){
   try{
     const db = await openDB();
@@ -787,8 +838,13 @@ async function deletePhotosByFolder(folderId){
       };
       tx.oncomplete = resolve;
       tx.onerror = ()=> reject(tx.error);
+      tx.onabort = ()=> reject(tx.error);
     });
-  }catch(e){ console.warn('folder photo delete failed', e); }
+    return true;
+  }catch(e){
+    console.warn('folder photo delete failed', e);
+    return false;
+  }
 }
 
 function formatDateTime(date){
@@ -830,7 +886,13 @@ function openNewBuildingSheet(){
     if(!name){ toast('建物名を入力してください'); return; }
     const b = { id: uid(), name, createdAt: Date.now(), folders: [] };
     state.buildings.unshift(b);
-    await saveState();
+    // v2.7 修正②-1：保存失敗時はロールバックして成功表示しない
+    const saved = await saveState();
+    if(!saved){
+      state.buildings = state.buildings.filter(x=>x.id !== b.id);
+      toast('⚠️ 建物の保存に失敗しました。端末の空き容量をご確認ください。');
+      return;
+    }
     overlay.remove();
     renderBuildings();
     toast('建物を登録しました');
@@ -872,7 +934,7 @@ function backToBuildings(){
   $('#exportBtn').style.display = 'none';
   $('#logoutBtn').style.display = '';
   $('#headerTitle').textContent = '現場スナップ';
-  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.6</span>';
+  $('#crumb').innerHTML = '建物を選んで撮影を始めます <span style="opacity:.6; font-size:.72rem;">v2.7</span>';
   renderBuildings();
 }
 
@@ -933,8 +995,16 @@ function openRenameFolderSheet(folder){
     if(newName === folder.name){ overlay.remove(); return; }
     const b = state.buildings.find(x=>x.id===currentBuildingId);
     const f = (b.folders||[]).find(x=>x.id===folder.id);
-    if(f){ f.name = newName; }
-    await saveState();
+    if(!f){ overlay.remove(); return; }
+    // v2.7 修正②-3：保存失敗時は元の名前に戻す
+    const oldName = f.name;
+    f.name = newName;
+    const saved = await saveState();
+    if(!saved){
+      f.name = oldName;
+      toast('⚠️ フォルダ名の保存に失敗しました。端末の空き容量をご確認ください。');
+      return;
+    }
     overlay.remove();
     await renderFolderBar();
     toast('フォルダ名を変更しました');
@@ -966,9 +1036,17 @@ function openNewFolderSheet(){
     const b = state.buildings.find(x=>x.id===currentBuildingId);
     const f = { id: uid(), name };
     b.folders = b.folders || [];
+    const previousFolderId = currentFolderId;
     b.folders.push(f);
     currentFolderId = f.id;
-    await saveState();
+    // v2.7 修正②-2：保存失敗時はロールバックして成功表示しない
+    const saved = await saveState();
+    if(!saved){
+      b.folders = b.folders.filter(x=>x.id !== f.id);
+      currentFolderId = previousFolderId;
+      toast('⚠️ フォルダの保存に失敗しました。端末の空き容量をご確認ください。');
+      return;
+    }
     overlay.remove();
     await renderFolderBar();
     await renderPhotoArea();
@@ -1055,8 +1133,12 @@ async function renderPhotoArea(){
         overlay.remove();
         const idx = arr.findIndex(x=>x.id===id);
         if(idx>=0){
-          // IndexedDBから直接1件削除（全件削除→書き直しをしないので安全）
-          await deletePhotoById(id);
+          // v2.7 修正①：削除成功確認後にのみ画面更新・成功表示
+          const deleted = await deletePhotoById(id);
+          if(!deleted){
+            toast('⚠️ 写真の削除に失敗しました。もう一度お試しください。');
+            return;
+          }
           arr.splice(idx,1);
           delete state.photosByFolder[currentFolderId];
           state.photosByFolder[currentFolderId] = arr;
@@ -1070,7 +1152,7 @@ async function renderPhotoArea(){
 }
 
 /* ---------- 写真追加処理（撮影／選択 共通） ---------- */
-// v2.6 安定化改修：修正①②③④
+// v2.7 安定化改修：修正①②③④
 async function handleFiles(fileList){
   if(!currentFolderId){
     toast('先にフォルダを選択・作成してください');
@@ -1221,6 +1303,9 @@ function openFullPreview(p){
 }
 
 /* ---------- ZIPエクスポート（JSZipをCDNから読み込み） ---------- */
+// TODO production: JSZipをローカル同梱してオフラインZIP出力対応
+// TODO production: ensureJSZipの多重読み込み防止
+// TODO: 高画質版生成を1〜2件のキュー方式にしてモバイル端末のメモリ負荷を抑える
 let jszipLoaded = false;
 function ensureJSZip(){
   return new Promise((resolve,reject)=>{
@@ -1247,7 +1332,7 @@ async function exportBuildingZip(){
     const fullRoot = zip.folder('細部確認用（高画質）');
     let totalPhotos = 0;
     let fullCount = 0;
-    // v2.6 修正⑤：フォルダ名に連番を付けて衝突を防ぐ
+    // v2.7 修正⑤：フォルダ名に連番を付けて衝突を防ぐ
     const usedFolderNames = new Set();
     let folderIdx = 1;
 
